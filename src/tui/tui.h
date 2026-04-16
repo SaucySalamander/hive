@@ -1,5 +1,5 @@
-#ifndef CHARNESS_TUI_TUI_H
-#define CHARNESS_TUI_TUI_H
+#ifndef HIVE_TUI_TUI_H
+#define HIVE_TUI_TUI_H
 
 #include "core/types.h"
 
@@ -7,15 +7,15 @@
 extern "C" {
 #endif
 
-typedef struct charness_runtime charness_runtime_t;
+typedef struct hive_runtime hive_runtime_t;
 
 /**
  * Run the ncurses TUI, or return unavailable when ncurses support is absent.
  *
  * @param runtime Runtime state.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_tui_run(charness_runtime_t *runtime);
+hive_status_t hive_tui_run(hive_runtime_t *runtime);
 
 #ifdef __cplusplus
 }

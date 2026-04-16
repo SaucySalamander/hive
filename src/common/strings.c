@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *charness_string_dup(const char *text)
+char *hive_string_dup(const char *text)
 {
     if (text == NULL) {
         return NULL;
@@ -21,7 +21,7 @@ char *charness_string_dup(const char *text)
     return copy;
 }
 
-char *charness_string_ndup(const char *text, size_t length)
+char *hive_string_ndup(const char *text, size_t length)
 {
     if (text == NULL) {
         return NULL;
@@ -37,7 +37,7 @@ char *charness_string_ndup(const char *text, size_t length)
     return copy;
 }
 
-char *charness_string_vformat(const char *format, va_list args)
+char *hive_string_vformat(const char *format, va_list args)
 {
     if (format == NULL) {
         return NULL;
@@ -70,11 +70,11 @@ char *charness_string_vformat(const char *format, va_list args)
     return formatted;
 }
 
-char *charness_string_format(const char *format, ...)
+char *hive_string_format(const char *format, ...)
 {
     va_list args;
     va_start(args, format);
-    char *formatted = charness_string_vformat(format, args);
+    char *formatted = hive_string_vformat(format, args);
     va_end(args);
     return formatted;
 }

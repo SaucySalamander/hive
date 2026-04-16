@@ -16,10 +16,10 @@ static const char *safe_text(const char *text)
 
 static char *compose_prompt(const char *agent_name,
                             const char *instructions,
-                            const charness_runtime_t *runtime,
+                            const hive_runtime_t *runtime,
                             const char *prior_output)
 {
-    return charness_string_format(
+    return hive_string_format(
         "Role: %s\n"
         "Instructions:\n%s\n\n"
         "Workspace root:\n%s\n\n"
@@ -36,7 +36,7 @@ static char *compose_prompt(const char *agent_name,
         safe_text(prior_output));
 }
 
-charness_status_t charness_agent_generate(charness_runtime_t *runtime,
+hive_status_t hive_agent_generate(hive_runtime_t *runtime,
                                           const char *agent_name,
                                           const char *instructions,
                                           const char *prior_output,
@@ -44,15 +44,15 @@ charness_status_t charness_agent_generate(charness_runtime_t *runtime,
                                           char **output_out)
 {
     if (runtime == NULL || agent_name == NULL || instructions == NULL || output_out == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     char *prompt = compose_prompt(agent_name, instructions, runtime, prior_output);
     if (prompt == NULL) {
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
-    charness_inference_request_t request = {
+    hive_inference_request_t request = {
         .agent_name = agent_name,
         .system_prompt = instructions,
         .user_prompt = prompt,
@@ -60,37 +60,37 @@ charness_status_t charness_agent_generate(charness_runtime_t *runtime,
     };
 
     if (runtime->logger.initialized) {
-        charness_logger_logf(&runtime->logger,
-                             CHARNESS_LOG_DEBUG,
+        hive_logger_logf(&runtime->logger,
+                             HIVE_LOG_DEBUG,
                              "agent",
                              "generate_start",
                              "running %s",
                              safe_text(agent_name));
     }
 
-    charness_inference_response_t response = {0};
-    charness_status_t status = charness_inference_adapter_generate(&runtime->adapter, &request, &response);
+    hive_inference_response_t response = {0};
+    hive_status_t status = hive_inference_adapter_generate(&runtime->adapter, &request, &response);
     free(prompt);
 
-    if (status != CHARNESS_STATUS_OK) {
+    if (status != HIVE_STATUS_OK) {
         if (runtime->logger.initialized) {
-            charness_logger_logf(&runtime->logger,
-                                 CHARNESS_LOG_ERROR,
+            hive_logger_logf(&runtime->logger,
+                                 HIVE_LOG_ERROR,
                                  "agent",
                                  "generate_failed",
                                  "%s failed with %s",
                                  safe_text(agent_name),
-                                 charness_status_to_string(status));
+                                 hive_status_to_string(status));
         }
         return status;
     }
 
     char *critique = NULL;
     char *refined = NULL;
-    status = charness_reflexion_apply(agent_name, response.text, &critique, &refined);
+    status = hive_reflexion_apply(agent_name, response.text, &critique, &refined);
     free(response.text);
 
-    if (status != CHARNESS_STATUS_OK) {
+    if (status != HIVE_STATUS_OK) {
         free(critique);
         free(refined);
         return status;
@@ -105,25 +105,25 @@ charness_status_t charness_agent_generate(charness_runtime_t *runtime,
     *output_out = refined;
 
     if (runtime->logger.initialized) {
-        charness_logger_logf(&runtime->logger,
-                             CHARNESS_LOG_DEBUG,
+        hive_logger_logf(&runtime->logger,
+                             HIVE_LOG_DEBUG,
                              "agent",
                              "generate_complete",
                              "%s completed",
                              safe_text(agent_name));
     }
 
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-charness_status_t charness_agent_run(const charness_agent_t *agent,
-                                     charness_runtime_t *runtime,
+hive_status_t hive_agent_run(const hive_agent_t *agent,
+                                     hive_runtime_t *runtime,
                                      const char *prior_output,
                                      char **critique_out,
                                      char **output_out)
 {
     if (agent == NULL || agent->vtable == NULL || agent->vtable->run == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     return agent->vtable->run(agent, runtime, prior_output, critique_out, output_out);

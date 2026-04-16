@@ -4,6 +4,6 @@
 
 int main(int argc, char **argv)
 {
-    const charness_status_t status = charness_cli_run(argc, argv);
-    return status == CHARNESS_STATUS_OK ? EXIT_SUCCESS : EXIT_FAILURE;
+    const hive_status_t status = hive_cli_run(argc, argv);
+    return status == HIVE_STATUS_OK ? EXIT_SUCCESS : EXIT_FAILURE;
 }

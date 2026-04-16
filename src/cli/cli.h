@@ -1,5 +1,5 @@
-#ifndef CHARNESS_CLI_CLI_H
-#define CHARNESS_CLI_CLI_H
+#ifndef HIVE_CLI_CLI_H
+#define HIVE_CLI_CLI_H
 
 #include "core/types.h"
 
@@ -12,9 +12,9 @@ extern "C" {
  *
  * @param argc Argument count.
  * @param argv Argument vector.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_cli_run(int argc, char **argv);
+hive_status_t hive_cli_run(int argc, char **argv);
 
 #ifdef __cplusplus
 }

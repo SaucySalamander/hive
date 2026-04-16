@@ -35,12 +35,12 @@ static bool contains_any(const char *text, const char *const needles[])
     return false;
 }
 
-charness_status_t charness_evaluator_score(const char *agent_name,
+hive_status_t hive_evaluator_score(const char *agent_name,
                                            const char *output,
-                                           charness_score_t *score_out)
+                                           hive_score_t *score_out)
 {
     if (score_out == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     memset(score_out, 0, sizeof(*score_out));
@@ -105,10 +105,10 @@ charness_status_t charness_evaluator_score(const char *agent_name,
                                       score_out->style * 20U +
                                       score_out->test_coverage * 15U) / 100U);
 
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-bool charness_evaluator_is_acceptable(const charness_score_t *score, unsigned threshold)
+bool hive_evaluator_is_acceptable(const hive_score_t *score, unsigned threshold)
 {
     if (score == NULL) {
         return false;

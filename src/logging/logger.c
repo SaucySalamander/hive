@@ -6,7 +6,7 @@
 #include <string.h>
 #include <time.h>
 
-#if CHARNESS_HAVE_SYSLOG
+#if HIVE_HAVE_SYSLOG
 #include <syslog.h>
 #endif
 
@@ -15,31 +15,31 @@ static const char *safe_text(const char *text)
     return text != NULL ? text : "";
 }
 
-static int level_to_syslog_priority(charness_log_level_t level)
+static int level_to_syslog_priority(hive_log_level_t level)
 {
     switch (level) {
-    case CHARNESS_LOG_DEBUG:
+    case HIVE_LOG_DEBUG:
         return 7;
-    case CHARNESS_LOG_INFO:
+    case HIVE_LOG_INFO:
         return 6;
-    case CHARNESS_LOG_WARN:
+    case HIVE_LOG_WARN:
         return 4;
-    case CHARNESS_LOG_ERROR:
+    case HIVE_LOG_ERROR:
     default:
         return 3;
     }
 }
 
-const char *charness_log_level_to_string(charness_log_level_t level)
+const char *hive_log_level_to_string(hive_log_level_t level)
 {
     switch (level) {
-    case CHARNESS_LOG_DEBUG:
+    case HIVE_LOG_DEBUG:
         return "debug";
-    case CHARNESS_LOG_INFO:
+    case HIVE_LOG_INFO:
         return "info";
-    case CHARNESS_LOG_WARN:
+    case HIVE_LOG_WARN:
         return "warn";
-    case CHARNESS_LOG_ERROR:
+    case HIVE_LOG_ERROR:
         return "error";
     default:
         return "unknown";
@@ -83,8 +83,8 @@ static void json_escape(FILE *stream, const char *text)
     }
 }
 
-static void log_record(charness_logger_t *logger,
-                       charness_log_level_t level,
+static void log_record(hive_logger_t *logger,
+                       hive_log_level_t level,
                        const char *component,
                        const char *event,
                        const char *message)
@@ -112,7 +112,7 @@ static void log_record(charness_logger_t *logger,
     fputs("\"ts\":\"", stderr);
     json_escape(stderr, timestamp);
     fputs("\",\"level\":\"", stderr);
-    json_escape(stderr, charness_log_level_to_string(level));
+    json_escape(stderr, hive_log_level_to_string(level));
     fputs("\",\"component\":\"", stderr);
     json_escape(stderr, safe_text(component));
     fputs("\",\"event\":\"", stderr);
@@ -122,7 +122,7 @@ static void log_record(charness_logger_t *logger,
     fputs("\"}\n", stderr);
     fflush(stderr);
 
-#if CHARNESS_HAVE_SYSLOG
+#if HIVE_HAVE_SYSLOG
     if (logger->use_syslog) {
         syslog(level_to_syslog_priority(level), "%s:%s: %s", safe_text(component), safe_text(event), safe_text(message));
     }
@@ -131,27 +131,27 @@ static void log_record(charness_logger_t *logger,
     pthread_mutex_unlock(&logger->mutex);
 }
 
-charness_status_t charness_logger_init(charness_logger_t *logger,
+hive_status_t hive_logger_init(hive_logger_t *logger,
                                        const char *program_name,
                                        bool enable_syslog,
-                                       charness_log_level_t level)
+                                       hive_log_level_t level)
 {
     if (logger == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     memset(logger, 0, sizeof(*logger));
 
     const int mutex_status = pthread_mutex_init(&logger->mutex, NULL);
     if (mutex_status != 0) {
-        return CHARNESS_STATUS_ERROR;
+        return HIVE_STATUS_ERROR;
     }
 
     (void)snprintf(logger->program_name, sizeof(logger->program_name), "%s", safe_text(program_name));
     logger->level = level;
     logger->initialized = true;
 
-#if CHARNESS_HAVE_SYSLOG
+#if HIVE_HAVE_SYSLOG
     logger->use_syslog = enable_syslog && true;
     if (logger->use_syslog) {
         openlog(logger->program_name[0] != '\0' ? logger->program_name : "hive", LOG_PID | LOG_NDELAY, LOG_USER);
@@ -161,16 +161,16 @@ charness_status_t charness_logger_init(charness_logger_t *logger,
     (void)enable_syslog;
 #endif
 
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-void charness_logger_deinit(charness_logger_t *logger)
+void hive_logger_deinit(hive_logger_t *logger)
 {
     if (logger == NULL || !logger->initialized) {
         return;
     }
 
-#if CHARNESS_HAVE_SYSLOG
+#if HIVE_HAVE_SYSLOG
     if (logger->use_syslog) {
         closelog();
     }
@@ -180,7 +180,7 @@ void charness_logger_deinit(charness_logger_t *logger)
     memset(logger, 0, sizeof(*logger));
 }
 
-void charness_logger_set_level(charness_logger_t *logger, charness_log_level_t level)
+void hive_logger_set_level(hive_logger_t *logger, hive_log_level_t level)
 {
     if (logger == NULL || !logger->initialized) {
         return;
@@ -189,8 +189,8 @@ void charness_logger_set_level(charness_logger_t *logger, charness_log_level_t l
     logger->level = level;
 }
 
-void charness_logger_log(charness_logger_t *logger,
-                         charness_log_level_t level,
+void hive_logger_log(hive_logger_t *logger,
+                         hive_log_level_t level,
                          const char *component,
                          const char *event,
                          const char *message)
@@ -198,8 +198,8 @@ void charness_logger_log(charness_logger_t *logger,
     log_record(logger, level, component, event, message);
 }
 
-void charness_logger_logf(charness_logger_t *logger,
-                          charness_log_level_t level,
+void hive_logger_logf(hive_logger_t *logger,
+                          hive_log_level_t level,
                           const char *component,
                           const char *event,
                           const char *format,
@@ -211,11 +211,11 @@ void charness_logger_logf(charness_logger_t *logger,
 
     va_list args;
     va_start(args, format);
-    char *message = charness_string_vformat(format, args);
+    char *message = hive_string_vformat(format, args);
     va_end(args);
 
     if (message == NULL) {
-        log_record(logger, CHARNESS_LOG_ERROR, component, "log_format_failed", "failed to format log message");
+        log_record(logger, HIVE_LOG_ERROR, component, "log_format_failed", "failed to format log message");
         return;
     }
 

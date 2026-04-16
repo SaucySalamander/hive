@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct charness_mock_inference_state {
-    struct charness_logger *logger;
-} charness_mock_inference_state_t;
+typedef struct hive_mock_inference_state {
+    struct hive_logger *logger;
+} hive_mock_inference_state_t;
 
 static const char *safe_text(const char *text)
 {
@@ -32,25 +32,25 @@ static size_t estimate_tokens(const char *text)
     return tokens;
 }
 
-static charness_status_t mock_generate(void *state,
-                                       const charness_inference_request_t *request,
-                                       charness_inference_response_t *response)
+static hive_status_t mock_generate(void *state,
+                                       const hive_inference_request_t *request,
+                                       hive_inference_response_t *response)
 {
     if (state == NULL || request == NULL || response == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
-    const charness_mock_inference_state_t *mock_state = state;
+    const hive_mock_inference_state_t *mock_state = state;
     if (mock_state->logger != NULL) {
-        charness_logger_logf(mock_state->logger,
-                             CHARNESS_LOG_DEBUG,
+        hive_logger_logf(mock_state->logger,
+                             HIVE_LOG_DEBUG,
                              "inference",
                              "mock_generate",
                              "echoing prompt for %s",
                              safe_text(request->agent_name));
     }
 
-    char *payload = charness_string_format(
+    char *payload = hive_string_format(
         "[mock:%s]\n\n[system]\n%s\n\n[user]\n%s\n\n[context]\n%s\n",
         safe_text(request->agent_name),
         safe_text(request->system_prompt),
@@ -58,12 +58,12 @@ static charness_status_t mock_generate(void *state,
         safe_text(request->context));
 
     if (payload == NULL) {
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
     response->text = payload;
     response->estimated_tokens = estimate_tokens(payload);
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
 static void mock_destroy(void *state)
@@ -71,45 +71,45 @@ static void mock_destroy(void *state)
     free(state);
 }
 
-static const charness_inference_adapter_vtable_t mock_vtable = {
+static const hive_inference_adapter_vtable_t mock_vtable = {
     .generate = mock_generate,
     .destroy = mock_destroy,
 };
 
-charness_status_t charness_inference_adapter_init_mock(charness_inference_adapter_t *adapter,
-                                                       struct charness_logger *logger)
+hive_status_t hive_inference_adapter_init_mock(hive_inference_adapter_t *adapter,
+                                                       struct hive_logger *logger)
 {
     if (adapter == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
-    charness_mock_inference_state_t *state = calloc(1U, sizeof(*state));
+    hive_mock_inference_state_t *state = calloc(1U, sizeof(*state));
     if (state == NULL) {
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
     state->logger = logger;
     adapter->vtable = &mock_vtable;
     adapter->state = state;
     adapter->is_mock = true;
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-charness_status_t charness_inference_adapter_init_custom(charness_inference_adapter_t *adapter,
-                                                         const charness_inference_adapter_vtable_t *vtable,
+hive_status_t hive_inference_adapter_init_custom(hive_inference_adapter_t *adapter,
+                                                         const hive_inference_adapter_vtable_t *vtable,
                                                          void *state)
 {
     if (adapter == NULL || vtable == NULL || vtable->generate == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     adapter->vtable = vtable;
     adapter->state = state;
     adapter->is_mock = false;
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-void charness_inference_adapter_deinit(charness_inference_adapter_t *adapter)
+void hive_inference_adapter_deinit(hive_inference_adapter_t *adapter)
 {
     if (adapter == NULL || adapter->vtable == NULL) {
         return;
@@ -122,12 +122,12 @@ void charness_inference_adapter_deinit(charness_inference_adapter_t *adapter)
     memset(adapter, 0, sizeof(*adapter));
 }
 
-charness_status_t charness_inference_adapter_generate(charness_inference_adapter_t *adapter,
-                                                      const charness_inference_request_t *request,
-                                                      charness_inference_response_t *response)
+hive_status_t hive_inference_adapter_generate(hive_inference_adapter_t *adapter,
+                                                      const hive_inference_request_t *request,
+                                                      hive_inference_response_t *response)
 {
     if (adapter == NULL || adapter->vtable == NULL || adapter->vtable->generate == NULL || response == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     response->text = NULL;

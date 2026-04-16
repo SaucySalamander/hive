@@ -1,5 +1,5 @@
-#ifndef CHARNESS_CORE_RUNTIME_H
-#define CHARNESS_CORE_RUNTIME_H
+#ifndef HIVE_CORE_RUNTIME_H
+#define HIVE_CORE_RUNTIME_H
 
 #include "core/session.h"
 #include "core/state_machine.h"
@@ -15,7 +15,7 @@ extern "C" {
 /**
  * Runtime configuration passed in from the CLI or a host application.
  */
-typedef struct charness_runtime_options {
+typedef struct hive_runtime_options {
     const char *workspace_root;
     const char *user_prompt;
     const char *rules_path;
@@ -27,21 +27,21 @@ typedef struct charness_runtime_options {
     bool enable_api;
     bool use_mock_inference;
     bool enable_syslog;
-    charness_tool_approval_fn approval_fn;
+    hive_tool_approval_fn approval_fn;
     void *approval_user_data;
-} charness_runtime_options_t;
+} hive_runtime_options_t;
 
 /**
  * Full runtime state for one execution.
  */
-typedef struct charness_runtime {
-    charness_runtime_options_t options;
-    charness_logger_t logger;
-    charness_inference_adapter_t adapter;
-    charness_tool_registry_t tools;
-    charness_session_t session;
-    charness_state_machine_t machine;
-} charness_runtime_t;
+typedef struct hive_runtime {
+    hive_runtime_options_t options;
+    hive_logger_t logger;
+    hive_inference_adapter_t adapter;
+    hive_tool_registry_t tools;
+    hive_session_t session;
+    hive_state_machine_t machine;
+} hive_runtime_t;
 
 /**
  * Initialize the runtime, logger, adapter, tool registry, and session state.
@@ -49,10 +49,10 @@ typedef struct charness_runtime {
  * @param runtime Runtime state to initialize.
  * @param options Runtime options.
  * @param program_name Process name used for logging.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_runtime_init(charness_runtime_t *runtime,
-                                        const charness_runtime_options_t *options,
+hive_status_t hive_runtime_init(hive_runtime_t *runtime,
+                                        const hive_runtime_options_t *options,
                                         const char *program_name);
 
 /**
@@ -60,15 +60,15 @@ charness_status_t charness_runtime_init(charness_runtime_t *runtime,
  *
  * @param runtime Runtime state to destroy.
  */
-void charness_runtime_deinit(charness_runtime_t *runtime);
+void hive_runtime_deinit(hive_runtime_t *runtime);
 
 /**
  * Run the hierarchical agent loop.
  *
  * @param runtime Runtime state.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_runtime_run(charness_runtime_t *runtime);
+hive_status_t hive_runtime_run(hive_runtime_t *runtime);
 
 #ifdef __cplusplus
 }

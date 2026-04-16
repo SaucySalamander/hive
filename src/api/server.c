@@ -4,7 +4,7 @@
 #include "core/runtime.h"
 #include "logging/logger.h"
 
-#if CHARNESS_HAVE_LIBUV && CHARNESS_HAVE_CJSON
+#if HIVE_HAVE_LIBUV && HIVE_HAVE_CJSON
 
 #if __has_include(<uv.h>)
 #include <uv.h>
@@ -19,17 +19,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct charness_api_client_context {
+typedef struct hive_api_client_context {
     uv_tcp_t handle;
     uv_write_t write_request;
     char *response;
-} charness_api_client_context_t;
+} hive_api_client_context_t;
 
-typedef struct charness_api_server_context {
-    charness_runtime_t *runtime;
+typedef struct hive_api_server_context {
+    hive_runtime_t *runtime;
     uv_loop_t loop;
     uv_tcp_t server;
-} charness_api_server_context_t;
+} hive_api_server_context_t;
 
 static void close_client(uv_handle_t *handle)
 {
@@ -39,7 +39,7 @@ static void close_client(uv_handle_t *handle)
 static void on_write_complete(uv_write_t *request, int status)
 {
     (void)status;
-    charness_api_client_context_t *client = request->data;
+    hive_api_client_context_t *client = request->data;
     if (client != NULL) {
         free(client->response);
         client->response = NULL;
@@ -47,10 +47,10 @@ static void on_write_complete(uv_write_t *request, int status)
     }
 }
 
-static void send_http_response(charness_api_client_context_t *client, const char *body, int status_code)
+static void send_http_response(hive_api_client_context_t *client, const char *body, int status_code)
 {
     const char *status_text = status_code == 200 ? "200 OK" : status_code == 404 ? "404 Not Found" : "500 Internal Server Error";
-    char *response = charness_string_format(
+    char *response = hive_string_format(
         "HTTP/1.1 %s\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length: %zu\r\n"
@@ -71,7 +71,7 @@ static void send_http_response(charness_api_client_context_t *client, const char
     (void)uv_write(&client->write_request, (uv_stream_t *)&client->handle, &buffer, 1, on_write_complete);
 }
 
-static char *build_body(charness_runtime_t *runtime, const char *path)
+static char *build_body(hive_runtime_t *runtime, const char *path)
 {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
@@ -95,8 +95,8 @@ static char *build_body(charness_runtime_t *runtime, const char *path)
 
 static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 {
-    charness_api_server_context_t *server = stream->data;
-    charness_api_client_context_t *client = stream->handle->data;
+    hive_api_server_context_t *server = stream->data;
+    hive_api_client_context_t *client = stream->handle->data;
 
     if (nread <= 0) {
         free(buf->base);
@@ -140,12 +140,12 @@ static void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *b
 
 static void on_new_connection(uv_stream_t *server_stream, int status)
 {
-    charness_api_server_context_t *server = server_stream->data;
+    hive_api_server_context_t *server = server_stream->data;
     if (status < 0) {
         return;
     }
 
-    charness_api_client_context_t *client = calloc(1U, sizeof(*client));
+    hive_api_client_context_t *client = calloc(1U, sizeof(*client));
     if (client == NULL) {
         return;
     }
@@ -163,40 +163,40 @@ static void on_new_connection(uv_stream_t *server_stream, int status)
     }
 }
 
-charness_status_t charness_api_server_run(charness_runtime_t *runtime)
+hive_status_t hive_api_server_run(hive_runtime_t *runtime)
 {
     if (runtime == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
-    charness_api_server_context_t context;
+    hive_api_server_context_t context;
     memset(&context, 0, sizeof(context));
     context.runtime = runtime;
 
     if (uv_loop_init(&context.loop) != 0) {
-        return CHARNESS_STATUS_ERROR;
+        return HIVE_STATUS_ERROR;
     }
 
     if (uv_tcp_init(&context.loop, &context.server) != 0) {
         uv_loop_close(&context.loop);
-        return CHARNESS_STATUS_ERROR;
+        return HIVE_STATUS_ERROR;
     }
 
     context.server.data = &context;
     uv_ip4_addr(runtime->options.api_bind_address, (int)runtime->options.api_port, (struct sockaddr_in *)&context.server);
     if (uv_tcp_bind(&context.server, (const struct sockaddr *)&context.server, 0) != 0) {
         uv_loop_close(&context.loop);
-        return CHARNESS_STATUS_ERROR;
+        return HIVE_STATUS_ERROR;
     }
 
     if (uv_listen((uv_stream_t *)&context.server, 16, on_new_connection) != 0) {
         uv_loop_close(&context.loop);
-        return CHARNESS_STATUS_ERROR;
+        return HIVE_STATUS_ERROR;
     }
 
     if (runtime->logger.initialized) {
-        charness_logger_logf(&runtime->logger,
-                             CHARNESS_LOG_INFO,
+        hive_logger_logf(&runtime->logger,
+                             HIVE_LOG_INFO,
                              "api",
                              "listen",
                              "listening on %s:%u",
@@ -206,15 +206,15 @@ charness_status_t charness_api_server_run(charness_runtime_t *runtime)
 
     (void)uv_run(&context.loop, UV_RUN_DEFAULT);
     uv_loop_close(&context.loop);
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
 #else
 
-charness_status_t charness_api_server_run(charness_runtime_t *runtime)
+hive_status_t hive_api_server_run(hive_runtime_t *runtime)
 {
     (void)runtime;
-    return CHARNESS_STATUS_UNAVAILABLE;
+    return HIVE_STATUS_UNAVAILABLE;
 }
 
 #endif

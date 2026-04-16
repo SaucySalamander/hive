@@ -16,19 +16,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Threads REQUIRED)
 
-check_include_file(argp.h CHARNESS_HAVE_ARGP_H)
-check_include_file(syslog.h CHARNESS_HAVE_SYSLOG_H)
+check_include_file(argp.h HIVE_HAVE_ARGP_H)
+check_include_file(syslog.h HIVE_HAVE_SYSLOG_H)
 
-set(CHARNESS_HAVE_NCURSES 0)
-set(CHARNESS_HAVE_LIBUV 0)
-set(CHARNESS_HAVE_CJSON 0)
-set(CHARNESS_LIBUV_TARGET "")
-set(CHARNESS_CJSON_TARGET "")
+set(HIVE_HAVE_NCURSES 0)
+set(HIVE_HAVE_LIBUV 0)
+set(HIVE_HAVE_CJSON 0)
+set(HIVE_LIBUV_TARGET "")
+set(HIVE_CJSON_TARGET "")
 
 if(HIVE_ENABLE_TUI)
   find_package(Curses QUIET)
   if(CURSES_FOUND)
-    set(CHARNESS_HAVE_NCURSES 1)
+    set(HIVE_HAVE_NCURSES 1)
   endif()
 endif()
 
@@ -37,44 +37,44 @@ if(HIVE_ENABLE_API)
 
   find_package(uv QUIET CONFIG)
   if(TARGET uv::uv)
-    set(CHARNESS_LIBUV_TARGET uv::uv)
-    set(CHARNESS_HAVE_LIBUV 1)
+    set(HIVE_LIBUV_TARGET uv::uv)
+    set(HIVE_HAVE_LIBUV 1)
   elseif(TARGET uv)
-    set(CHARNESS_LIBUV_TARGET uv)
-    set(CHARNESS_HAVE_LIBUV 1)
+    set(HIVE_LIBUV_TARGET uv)
+    set(HIVE_HAVE_LIBUV 1)
   elseif(PkgConfig_FOUND)
     pkg_check_modules(PC_LIBUV QUIET IMPORTED_TARGET libuv)
     if(PC_LIBUV_FOUND)
-      set(CHARNESS_LIBUV_TARGET PkgConfig::PC_LIBUV)
-      set(CHARNESS_HAVE_LIBUV 1)
+      set(HIVE_LIBUV_TARGET PkgConfig::PC_LIBUV)
+      set(HIVE_HAVE_LIBUV 1)
     endif()
   endif()
 
   find_package(cJSON QUIET CONFIG)
   if(TARGET cJSON::cJSON)
-    set(CHARNESS_CJSON_TARGET cJSON::cJSON)
-    set(CHARNESS_HAVE_CJSON 1)
+    set(HIVE_CJSON_TARGET cJSON::cJSON)
+    set(HIVE_HAVE_CJSON 1)
   elseif(TARGET cjson::cjson)
-    set(CHARNESS_CJSON_TARGET cjson::cjson)
-    set(CHARNESS_HAVE_CJSON 1)
+    set(HIVE_CJSON_TARGET cjson::cjson)
+    set(HIVE_HAVE_CJSON 1)
   elseif(PkgConfig_FOUND)
     pkg_check_modules(PC_CJSON QUIET IMPORTED_TARGET cjson)
     if(PC_CJSON_FOUND)
-      set(CHARNESS_CJSON_TARGET PkgConfig::PC_CJSON)
-      set(CHARNESS_HAVE_CJSON 1)
+      set(HIVE_CJSON_TARGET PkgConfig::PC_CJSON)
+      set(HIVE_HAVE_CJSON 1)
     endif()
   endif()
 endif()
 
-if(HIVE_ENABLE_TUI AND NOT CHARNESS_HAVE_NCURSES)
+if(HIVE_ENABLE_TUI AND NOT HIVE_HAVE_NCURSES)
   message(STATUS "hive: ncurses not found, building the TUI stub")
 endif()
 
-if(HIVE_ENABLE_API AND NOT (CHARNESS_HAVE_LIBUV AND CHARNESS_HAVE_CJSON))
+if(HIVE_ENABLE_API AND NOT (HIVE_HAVE_LIBUV AND HIVE_HAVE_CJSON))
   message(STATUS "hive: libuv/cJSON not fully found, building the API stub")
 endif()
 
-set(CHARNESS_SOURCES
+set(HIVE_SOURCES
   src/main.c
   src/common/strings.c
   src/core/types.c
@@ -98,18 +98,18 @@ set(CHARNESS_SOURCES
   src/api/server.c
 )
 
-add_executable(hive ${CHARNESS_SOURCES})
+add_executable(hive ${HIVE_SOURCES})
 
 target_include_directories(hive PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_compile_definitions(hive PRIVATE
   _POSIX_C_SOURCE=200809L
-  CHARNESS_HAVE_ARGP=$<BOOL:${CHARNESS_HAVE_ARGP_H}>
-  CHARNESS_HAVE_SYSLOG=$<BOOL:${CHARNESS_HAVE_SYSLOG_H}>
-  CHARNESS_HAVE_NCURSES=${CHARNESS_HAVE_NCURSES}
-  CHARNESS_HAVE_LIBUV=${CHARNESS_HAVE_LIBUV}
-  CHARNESS_HAVE_CJSON=${CHARNESS_HAVE_CJSON}
-  CHARNESS_ENABLE_SYSLOG=$<BOOL:${HIVE_ENABLE_SYSLOG}>
+  HIVE_HAVE_ARGP=$<BOOL:${HIVE_HAVE_ARGP_H}>
+  HIVE_HAVE_SYSLOG=$<BOOL:${HIVE_HAVE_SYSLOG_H}>
+  HIVE_HAVE_NCURSES=${HIVE_HAVE_NCURSES}
+  HIVE_HAVE_LIBUV=${HIVE_HAVE_LIBUV}
+  HIVE_HAVE_CJSON=${HIVE_HAVE_CJSON}
+  HIVE_ENABLE_SYSLOG=$<BOOL:${HIVE_ENABLE_SYSLOG}>
 )
 
 if(MSVC)
@@ -120,7 +120,7 @@ endif()
 
 target_link_libraries(hive PRIVATE Threads::Threads)
 
-if(CHARNESS_HAVE_NCURSES)
+if(HIVE_HAVE_NCURSES)
   if(TARGET Curses::Curses)
     target_link_libraries(hive PRIVATE Curses::Curses)
   else()
@@ -129,12 +129,12 @@ if(CHARNESS_HAVE_NCURSES)
   endif()
 endif()
 
-if(CHARNESS_HAVE_LIBUV)
-  target_link_libraries(hive PRIVATE ${CHARNESS_LIBUV_TARGET})
+if(HIVE_HAVE_LIBUV)
+  target_link_libraries(hive PRIVATE ${HIVE_LIBUV_TARGET})
 endif()
 
-if(CHARNESS_HAVE_CJSON)
-  target_link_libraries(hive PRIVATE ${CHARNESS_CJSON_TARGET})
+if(HIVE_HAVE_CJSON)
+  target_link_libraries(hive PRIVATE ${HIVE_CJSON_TARGET})
 endif()
 
 install(TARGETS hive RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

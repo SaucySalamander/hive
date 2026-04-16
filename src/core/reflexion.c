@@ -10,34 +10,34 @@ static const char *safe_text(const char *text)
     return text != NULL ? text : "";
 }
 
-charness_status_t charness_reflexion_apply(const char *agent_name,
+hive_status_t hive_reflexion_apply(const char *agent_name,
                                            const char *draft,
                                            char **critique_out,
                                            char **refined_out)
 {
     if (refined_out == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     const char *safe_agent = safe_text(agent_name);
     const char *safe_draft = safe_text(draft);
     const size_t draft_length = strlen(safe_draft);
 
-    char *critique = charness_string_format(
+    char *critique = hive_string_format(
         "Agent %s self-critique: the draft is %zu characters long and still needs explicit correctness, security, style, and test validation.",
         safe_agent,
         draft_length);
     if (critique == NULL) {
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
-    char *refined = charness_string_format(
+    char *refined = hive_string_format(
         "%s\n\n[self-critique]\n%s\n",
         safe_draft,
         critique);
     if (refined == NULL) {
         free(critique);
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
     if (critique_out != NULL) {
@@ -47,5 +47,5 @@ charness_status_t charness_reflexion_apply(const char *agent_name,
     }
 
     *refined_out = refined;
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }

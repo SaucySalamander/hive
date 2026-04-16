@@ -13,32 +13,32 @@ static void free_and_null(char **slot)
     }
 }
 
-charness_status_t charness_session_init(charness_session_t *session,
+hive_status_t hive_session_init(hive_session_t *session,
                                         const char *workspace_root,
                                         const char *user_prompt,
                                         const char *project_rules)
 {
     if (session == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     memset(session, 0, sizeof(*session));
 
-    session->workspace_root = charness_string_dup(workspace_root);
-    session->user_prompt = charness_string_dup(user_prompt);
-    session->project_rules = charness_string_dup(project_rules);
+    session->workspace_root = hive_string_dup(workspace_root);
+    session->user_prompt = hive_string_dup(user_prompt);
+    session->project_rules = hive_string_dup(project_rules);
 
     if ((workspace_root != NULL && session->workspace_root == NULL) ||
         (user_prompt != NULL && session->user_prompt == NULL) ||
         (project_rules != NULL && session->project_rules == NULL)) {
-        charness_session_deinit(session);
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        hive_session_deinit(session);
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-void charness_session_deinit(charness_session_t *session)
+void hive_session_deinit(hive_session_t *session)
 {
     if (session == NULL) {
         return;

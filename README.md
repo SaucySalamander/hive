@@ -68,19 +68,19 @@ In the TUI, every tool request is approved interactively before execution.
 
 ## Custom inference engine
 
-Replace the mock adapter by implementing `charness_inference_adapter_vtable_t` and initializing a custom adapter with `charness_inference_adapter_init_custom()`.
+Replace the mock adapter by implementing `hive_inference_adapter_vtable_t` and initializing a custom adapter with `hive_inference_adapter_init_custom()`.
 
 At a minimum, your engine must implement a `generate` callback that returns an allocated UTF-8 string for each request.
 
 ```c
-static charness_status_t my_generate(void *state,
-                                     const charness_inference_request_t *request,
-                                     charness_inference_response_t *response)
+static hive_status_t my_generate(void *state,
+                                     const hive_inference_request_t *request,
+                                     hive_inference_response_t *response)
 {
     (void)state;
     (void)request;
     (void)response;
-    return CHARNESS_STATUS_UNAVAILABLE;
+    return HIVE_STATUS_UNAVAILABLE;
 }
 ```
 

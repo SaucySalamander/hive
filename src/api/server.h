@@ -1,5 +1,5 @@
-#ifndef CHARNESS_API_SERVER_H
-#define CHARNESS_API_SERVER_H
+#ifndef HIVE_API_SERVER_H
+#define HIVE_API_SERVER_H
 
 #include "core/types.h"
 
@@ -7,15 +7,15 @@
 extern "C" {
 #endif
 
-typedef struct charness_runtime charness_runtime_t;
+typedef struct hive_runtime hive_runtime_t;
 
 /**
  * Run the optional HTTP/JSON API server, or return unavailable when disabled.
  *
  * @param runtime Runtime state.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_api_server_run(charness_runtime_t *runtime);
+hive_status_t hive_api_server_run(hive_runtime_t *runtime);
 
 #ifdef __cplusplus
 }

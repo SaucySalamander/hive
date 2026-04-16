@@ -1,5 +1,5 @@
-#ifndef CHARNESS_CORE_EDITOR_H
-#define CHARNESS_CORE_EDITOR_H
+#ifndef HIVE_CORE_EDITOR_H
+#define HIVE_CORE_EDITOR_H
 
 #include "core/types.h"
 
@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-typedef struct charness_runtime charness_runtime_t;
+typedef struct hive_runtime hive_runtime_t;
 
 /**
  * Run the editor agent.
@@ -16,9 +16,9 @@ typedef struct charness_runtime charness_runtime_t;
  * @param prior_output Optional prior output used as context.
  * @param critique_out Receives the self-critique text when requested.
  * @param output_out Receives the edited output.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_editor_run(charness_runtime_t *runtime,
+hive_status_t hive_editor_run(hive_runtime_t *runtime,
                                       const char *prior_output,
                                       char **critique_out,
                                       char **output_out);

@@ -3,7 +3,7 @@
 #include "core/runtime.h"
 #include "logging/logger.h"
 
-#if CHARNESS_HAVE_NCURSES
+#if HIVE_HAVE_NCURSES
 #if __has_include(<ncurses.h>)
 #include <ncurses.h>
 #elif __has_include(<curses.h>)
@@ -13,9 +13,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-typedef struct charness_tui_context {
-    charness_runtime_t *runtime;
-} charness_tui_context_t;
+typedef struct hive_tui_context {
+    hive_runtime_t *runtime;
+} hive_tui_context_t;
 
 static const char *safe_text(const char *text)
 {
@@ -24,11 +24,11 @@ static const char *safe_text(const char *text)
 
 static bool approval_callback(void *user_data, const char *tool_name, const char *details)
 {
-    charness_tui_context_t *context = user_data;
+    hive_tui_context_t *context = user_data;
     (void)context;
 
     erase();
-    mvprintw(0, 0, "charness tool approval required");
+    mvprintw(0, 0, "hive tool approval required");
     mvprintw(2, 0, "Tool: %s", safe_text(tool_name));
     mvprintw(4, 0, "Request: %s", safe_text(details));
     mvprintw(6, 0, "Approve execution? [y/N]");
@@ -38,23 +38,23 @@ static bool approval_callback(void *user_data, const char *tool_name, const char
         const int key = getch();
         if (key == 'y' || key == 'Y') {
             if (context != NULL && context->runtime != NULL && context->runtime->logger.initialized) {
-                charness_logger_log(&context->runtime->logger, CHARNESS_LOG_INFO, "tui", "approval", "approved tool request");
+                hive_logger_log(&context->runtime->logger, HIVE_LOG_INFO, "tui", "approval", "approved tool request");
             }
             return true;
         }
         if (key == 'n' || key == 'N' || key == 27) {
             if (context != NULL && context->runtime != NULL && context->runtime->logger.initialized) {
-                charness_logger_log(&context->runtime->logger, CHARNESS_LOG_WARN, "tui", "approval", "denied tool request");
+                hive_logger_log(&context->runtime->logger, HIVE_LOG_WARN, "tui", "approval", "denied tool request");
             }
             return false;
         }
     }
 }
 
-static void show_final_summary(charness_runtime_t *runtime)
+static void show_final_summary(hive_runtime_t *runtime)
 {
     erase();
-    mvprintw(0, 0, "charness run complete");
+    mvprintw(0, 0, "hive run complete");
     mvprintw(2, 0, "Overall score: %u", runtime->session.last_score.overall);
     mvprintw(3, 0, "Correctness:   %u", runtime->session.last_score.correctness);
     mvprintw(4, 0, "Security:      %u", runtime->session.last_score.security);
@@ -67,14 +67,14 @@ static void show_final_summary(charness_runtime_t *runtime)
     (void)getch();
 }
 
-charness_status_t charness_tui_run(charness_runtime_t *runtime)
+hive_status_t hive_tui_run(hive_runtime_t *runtime)
 {
     if (runtime == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     runtime->tools.auto_approve = false;
-    charness_tui_context_t context = {
+    hive_tui_context_t context = {
         .runtime = runtime,
     };
     runtime->tools.approval_fn = approval_callback;
@@ -87,14 +87,14 @@ charness_status_t charness_tui_run(charness_runtime_t *runtime)
     (void)curs_set(0);
 
     erase();
-    mvprintw(0, 0, "charness TUI");
+    mvprintw(0, 0, "hive TUI");
     mvprintw(2, 0, "Workspace: %s", safe_text(runtime->session.workspace_root));
     mvprintw(3, 0, "Prompt: %s", safe_text(runtime->session.user_prompt));
     mvprintw(5, 0, "Tool execution is gated interactively.");
     mvprintw(6, 0, "The runtime will now execute the hierarchical agent loop.");
     refresh();
 
-    const charness_status_t status = charness_runtime_run(runtime);
+    const hive_status_t status = hive_runtime_run(runtime);
     show_final_summary(runtime);
 
     endwin();
@@ -103,10 +103,10 @@ charness_status_t charness_tui_run(charness_runtime_t *runtime)
 
 #else
 
-charness_status_t charness_tui_run(charness_runtime_t *runtime)
+hive_status_t hive_tui_run(hive_runtime_t *runtime)
 {
     (void)runtime;
-    return CHARNESS_STATUS_UNAVAILABLE;
+    return HIVE_STATUS_UNAVAILABLE;
 }
 
 #endif

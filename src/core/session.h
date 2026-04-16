@@ -1,5 +1,5 @@
-#ifndef CHARNESS_CORE_SESSION_H
-#define CHARNESS_CORE_SESSION_H
+#ifndef HIVE_CORE_SESSION_H
+#define HIVE_CORE_SESSION_H
 
 #include "core/types.h"
 
@@ -8,9 +8,9 @@ extern "C" {
 #endif
 
 /**
- * Shared session state for a single charness run.
+ * Shared session state for a single hive run.
  */
-typedef struct charness_session {
+typedef struct hive_session {
     char *workspace_root;
     char *user_prompt;
     char *project_rules;
@@ -23,9 +23,9 @@ typedef struct charness_session {
     char *final_output;
     char *last_critique;
     char *last_error;
-    charness_score_t last_score;
+    hive_score_t last_score;
     unsigned iteration;
-} charness_session_t;
+} hive_session_t;
 
 /**
  * Initialize a session and duplicate its owned strings.
@@ -34,9 +34,9 @@ typedef struct charness_session {
  * @param workspace_root Workspace root string.
  * @param user_prompt User task prompt.
  * @param project_rules Project rules loaded from disk or defaults.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_session_init(charness_session_t *session,
+hive_status_t hive_session_init(hive_session_t *session,
                                         const char *workspace_root,
                                         const char *user_prompt,
                                         const char *project_rules);
@@ -46,7 +46,7 @@ charness_status_t charness_session_init(charness_session_t *session,
  *
  * @param session Session state to destroy.
  */
-void charness_session_deinit(charness_session_t *session);
+void hive_session_deinit(hive_session_t *session);
 
 #ifdef __cplusplus
 }

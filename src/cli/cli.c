@@ -8,7 +8,7 @@
 #include "core/runtime.h"
 #include "tui/tui.h"
 
-#if CHARNESS_HAVE_ARGP
+#if HIVE_HAVE_ARGP
 #include <argp.h>
 #endif
 
@@ -17,19 +17,19 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct charness_cli_state {
-    charness_runtime_options_t runtime_options;
+typedef struct hive_cli_state {
+    hive_runtime_options_t runtime_options;
     bool prompt_overridden;
     bool show_help;
     bool show_version;
-} charness_cli_state_t;
+} hive_cli_state_t;
 
 static const char *default_prompt(void)
 {
     return "Create a safe, production-grade C23 agent harness repository skeleton for hive.";
 }
 
-static void set_defaults(charness_cli_state_t *state)
+static void set_defaults(hive_cli_state_t *state)
 {
     memset(state, 0, sizeof(*state));
     state->runtime_options.workspace_root = ".";
@@ -89,7 +89,7 @@ static void print_version(FILE *stream)
     fputs("hive 0.1.0\n", stream);
 }
 
-#if CHARNESS_HAVE_ARGP
+#if HIVE_HAVE_ARGP
 static const struct argp_option argp_options[] = {
     {"workspace", 'w', "DIR", 0, "Set the workspace root", 0},
     {"prompt", 'p', "TEXT", 0, "Set the user prompt", 0},
@@ -106,7 +106,7 @@ static const struct argp_option argp_options[] = {
 
 static error_t parse_argp_option(int key, char *arg, struct argp_state *state)
 {
-    charness_cli_state_t *cli_state = state->input;
+    hive_cli_state_t *cli_state = state->input;
 
     switch (key) {
     case 'w':
@@ -167,39 +167,39 @@ static const struct argp argp_parser = {
 };
 #endif
 
-static charness_status_t run_application(const char *program_name, charness_cli_state_t *state)
+static hive_status_t run_application(const char *program_name, hive_cli_state_t *state)
 {
     if (state->runtime_options.enable_tui && state->runtime_options.enable_api) {
         fprintf(stderr, "hive: --tui and --api are mutually exclusive\n");
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
-    charness_runtime_t runtime;
-    charness_status_t status = charness_runtime_init(&runtime, &state->runtime_options, program_name);
-    if (status != CHARNESS_STATUS_OK) {
-        fprintf(stderr, "hive: runtime init failed: %s\n", charness_status_to_string(status));
+    hive_runtime_t runtime;
+    hive_status_t status = hive_runtime_init(&runtime, &state->runtime_options, program_name);
+    if (status != HIVE_STATUS_OK) {
+        fprintf(stderr, "hive: runtime init failed: %s\n", hive_status_to_string(status));
         return status;
     }
 
     if (state->runtime_options.enable_api) {
-        status = charness_api_server_run(&runtime);
+        status = hive_api_server_run(&runtime);
     } else if (state->runtime_options.enable_tui) {
-        status = charness_tui_run(&runtime);
+        status = hive_tui_run(&runtime);
     } else {
-        status = charness_runtime_run(&runtime);
+        status = hive_runtime_run(&runtime);
     }
 
-    charness_runtime_deinit(&runtime);
+    hive_runtime_deinit(&runtime);
     return status;
 }
 
-charness_status_t charness_cli_run(int argc, char **argv)
+hive_status_t hive_cli_run(int argc, char **argv)
 {
     const char *program_name = (argc > 0 && argv != NULL && argv[0] != NULL) ? argv[0] : "hive";
-    charness_cli_state_t state;
+    hive_cli_state_t state;
     set_defaults(&state);
 
-#if CHARNESS_HAVE_ARGP
+#if HIVE_HAVE_ARGP
     argp_parse(&argp_parser, argc, argv, 0, 0, &state);
 #else
     for (int index = 1; index < argc; ++index) {
@@ -226,18 +226,18 @@ charness_status_t charness_cli_run(int argc, char **argv)
         } else if (strcmp(argument, "--iterations") == 0 && index + 1 < argc) {
             if (!parse_unsigned(argv[++index], &state.runtime_options.max_iterations)) {
                 fprintf(stderr, "hive: invalid iteration count\n");
-                return CHARNESS_STATUS_INVALID_ARGUMENT;
+                return HIVE_STATUS_INVALID_ARGUMENT;
             }
         } else if (strcmp(argument, "--api-bind") == 0 && index + 1 < argc) {
             state.runtime_options.api_bind_address = argv[++index];
         } else if (strcmp(argument, "--api-port") == 0 && index + 1 < argc) {
             if (!parse_unsigned(argv[++index], &state.runtime_options.api_port)) {
                 fprintf(stderr, "hive: invalid API port\n");
-                return CHARNESS_STATUS_INVALID_ARGUMENT;
+                return HIVE_STATUS_INVALID_ARGUMENT;
             }
         } else if (argument[0] == '-' && argument[1] == '-') {
             fprintf(stderr, "hive: unknown option: %s\n", argument);
-            return CHARNESS_STATUS_INVALID_ARGUMENT;
+            return HIVE_STATUS_INVALID_ARGUMENT;
         } else if (!state.prompt_overridden) {
             state.runtime_options.user_prompt = argument;
             state.prompt_overridden = true;
@@ -247,12 +247,12 @@ charness_status_t charness_cli_run(int argc, char **argv)
 
     if (state.show_help) {
         print_help(stdout, program_name);
-        return CHARNESS_STATUS_OK;
+        return HIVE_STATUS_OK;
     }
 
     if (state.show_version) {
         print_version(stdout);
-        return CHARNESS_STATUS_OK;
+        return HIVE_STATUS_OK;
     }
 
     return run_application(program_name, &state);

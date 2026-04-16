@@ -3,21 +3,21 @@
 #include "core/agent.h"
 #include "core/runtime.h"
 
-static charness_status_t coder_agent_run(const charness_agent_t *agent,
-                                         charness_runtime_t *runtime,
+static hive_status_t coder_agent_run(const hive_agent_t *agent,
+                                         hive_runtime_t *runtime,
                                          const char *prior_output,
                                          char **critique_out,
                                          char **output_out)
 {
-    return charness_agent_generate(runtime, agent->name, agent->instructions, prior_output, critique_out, output_out);
+    return hive_agent_generate(runtime, agent->name, agent->instructions, prior_output, critique_out, output_out);
 }
 
-static const charness_agent_vtable_t coder_vtable = {
+static const hive_agent_vtable_t coder_vtable = {
     .run = coder_agent_run,
 };
 
-static const charness_agent_t coder_agent = {
-    .kind = CHARNESS_AGENT_CODER,
+static const hive_agent_t coder_agent = {
+    .kind = HIVE_AGENT_CODER,
     .name = "Coder",
     .instructions =
         "Draft implementation guidance or code structure that is portable, leak-free, and easy to verify. "
@@ -25,10 +25,10 @@ static const charness_agent_t coder_agent = {
     .vtable = &coder_vtable,
 };
 
-charness_status_t charness_coder_run(charness_runtime_t *runtime,
+hive_status_t hive_coder_run(hive_runtime_t *runtime,
                                      const char *prior_output,
                                      char **critique_out,
                                      char **output_out)
 {
-    return charness_agent_run(&coder_agent, runtime, prior_output, critique_out, output_out);
+    return hive_agent_run(&coder_agent, runtime, prior_output, critique_out, output_out);
 }

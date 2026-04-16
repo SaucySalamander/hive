@@ -1,5 +1,5 @@
-#ifndef CHARNESS_CORE_EVALUATOR_H
-#define CHARNESS_CORE_EVALUATOR_H
+#ifndef HIVE_CORE_EVALUATOR_H
+#define HIVE_CORE_EVALUATOR_H
 
 #include "core/types.h"
 
@@ -13,11 +13,11 @@ extern "C" {
  * @param agent_name Name of the stage or agent being scored.
  * @param output Output text to score.
  * @param score_out Filled with the resulting score bundle.
- * @return CHARNESS_STATUS_OK on success.
+ * @return HIVE_STATUS_OK on success.
  */
-charness_status_t charness_evaluator_score(const char *agent_name,
+hive_status_t hive_evaluator_score(const char *agent_name,
                                            const char *output,
-                                           charness_score_t *score_out);
+                                           hive_score_t *score_out);
 
 /**
  * Decide whether a score is good enough to stop another refinement loop.
@@ -26,7 +26,7 @@ charness_status_t charness_evaluator_score(const char *agent_name,
  * @param threshold Minimum overall score.
  * @return true when the score is acceptable.
  */
-bool charness_evaluator_is_acceptable(const charness_score_t *score, unsigned threshold);
+bool hive_evaluator_is_acceptable(const hive_score_t *score, unsigned threshold);
 
 #ifdef __cplusplus
 }

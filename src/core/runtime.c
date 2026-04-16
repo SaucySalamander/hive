@@ -100,15 +100,15 @@ static char *load_project_rules(const char *requested_path)
         }
     }
 
-    return charness_string_dup(default_project_rules());
+    return hive_string_dup(default_project_rules());
 }
 
-charness_status_t charness_runtime_init(charness_runtime_t *runtime,
-                                        const charness_runtime_options_t *options,
+hive_status_t hive_runtime_init(hive_runtime_t *runtime,
+                                        const hive_runtime_options_t *options,
                                         const char *program_name)
 {
     if (runtime == NULL || options == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
     memset(runtime, 0, sizeof(*runtime));
@@ -130,88 +130,88 @@ charness_status_t charness_runtime_init(charness_runtime_t *runtime,
         runtime->options.max_iterations = 3U;
     }
 
-    charness_status_t status = charness_logger_init(&runtime->logger,
+    hive_status_t status = hive_logger_init(&runtime->logger,
                                                     program_name,
                                                     runtime->options.enable_syslog,
-                                                    CHARNESS_LOG_INFO);
-    if (status != CHARNESS_STATUS_OK) {
+                                                    HIVE_LOG_INFO);
+    if (status != HIVE_STATUS_OK) {
         return status;
     }
 
-    status = charness_inference_adapter_init_mock(&runtime->adapter, &runtime->logger);
-    if (status != CHARNESS_STATUS_OK) {
-        charness_logger_deinit(&runtime->logger);
+    status = hive_inference_adapter_init_mock(&runtime->adapter, &runtime->logger);
+    if (status != HIVE_STATUS_OK) {
+        hive_logger_deinit(&runtime->logger);
         return status;
     }
 
     char *rules_text = load_project_rules(runtime->options.rules_path);
     if (rules_text == NULL) {
-        charness_inference_adapter_deinit(&runtime->adapter);
-        charness_logger_deinit(&runtime->logger);
-        return CHARNESS_STATUS_OUT_OF_MEMORY;
+        hive_inference_adapter_deinit(&runtime->adapter);
+        hive_logger_deinit(&runtime->logger);
+        return HIVE_STATUS_OUT_OF_MEMORY;
     }
 
-    status = charness_session_init(&runtime->session,
+    status = hive_session_init(&runtime->session,
                                    runtime->options.workspace_root,
                                    runtime->options.user_prompt,
                                    rules_text);
     free(rules_text);
-    if (status != CHARNESS_STATUS_OK) {
-        charness_inference_adapter_deinit(&runtime->adapter);
-        charness_logger_deinit(&runtime->logger);
+    if (status != HIVE_STATUS_OK) {
+        hive_inference_adapter_deinit(&runtime->adapter);
+        hive_logger_deinit(&runtime->logger);
         return status;
     }
 
-    status = charness_tool_registry_init(&runtime->tools,
+    status = hive_tool_registry_init(&runtime->tools,
                                          runtime->session.workspace_root,
                                          &runtime->logger,
                                          runtime->options.approval_fn,
                                          runtime->options.approval_user_data,
                                          runtime->options.auto_approve);
-    if (status != CHARNESS_STATUS_OK) {
-        charness_session_deinit(&runtime->session);
-        charness_inference_adapter_deinit(&runtime->adapter);
-        charness_logger_deinit(&runtime->logger);
+    if (status != HIVE_STATUS_OK) {
+        hive_session_deinit(&runtime->session);
+        hive_inference_adapter_deinit(&runtime->adapter);
+        hive_logger_deinit(&runtime->logger);
         return status;
     }
 
-    status = charness_state_machine_init(&runtime->machine, runtime->options.max_iterations);
-    if (status != CHARNESS_STATUS_OK) {
-        charness_tool_registry_deinit(&runtime->tools);
-        charness_session_deinit(&runtime->session);
-        charness_inference_adapter_deinit(&runtime->adapter);
-        charness_logger_deinit(&runtime->logger);
+    status = hive_state_machine_init(&runtime->machine, runtime->options.max_iterations);
+    if (status != HIVE_STATUS_OK) {
+        hive_tool_registry_deinit(&runtime->tools);
+        hive_session_deinit(&runtime->session);
+        hive_inference_adapter_deinit(&runtime->adapter);
+        hive_logger_deinit(&runtime->logger);
         return status;
     }
 
-    charness_logger_logf(&runtime->logger,
-                         CHARNESS_LOG_INFO,
+    hive_logger_logf(&runtime->logger,
+                         HIVE_LOG_INFO,
                          "runtime",
                          "init",
                          "workspace=%s iterations=%u",
                          runtime->session.workspace_root,
                          runtime->options.max_iterations);
-    return CHARNESS_STATUS_OK;
+    return HIVE_STATUS_OK;
 }
 
-void charness_runtime_deinit(charness_runtime_t *runtime)
+void hive_runtime_deinit(hive_runtime_t *runtime)
 {
     if (runtime == NULL) {
         return;
     }
 
-    charness_tool_registry_deinit(&runtime->tools);
-    charness_session_deinit(&runtime->session);
-    charness_inference_adapter_deinit(&runtime->adapter);
-    charness_logger_deinit(&runtime->logger);
+    hive_tool_registry_deinit(&runtime->tools);
+    hive_session_deinit(&runtime->session);
+    hive_inference_adapter_deinit(&runtime->adapter);
+    hive_logger_deinit(&runtime->logger);
     memset(runtime, 0, sizeof(*runtime));
 }
 
-charness_status_t charness_runtime_run(charness_runtime_t *runtime)
+hive_status_t hive_runtime_run(hive_runtime_t *runtime)
 {
     if (runtime == NULL) {
-        return CHARNESS_STATUS_INVALID_ARGUMENT;
+        return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
-    return charness_state_machine_run(&runtime->machine, runtime);
+    return hive_state_machine_run(&runtime->machine, runtime);
 }

@@ -1,43 +1,43 @@
 #include "core/types.h"
 
-const char *charness_status_to_string(charness_status_t status)
+const char *hive_status_to_string(hive_status_t status)
 {
     switch (status) {
-    case CHARNESS_STATUS_OK:
+    case HIVE_STATUS_OK:
         return "ok";
-    case CHARNESS_STATUS_ERROR:
+    case HIVE_STATUS_ERROR:
         return "error";
-    case CHARNESS_STATUS_INVALID_ARGUMENT:
+    case HIVE_STATUS_INVALID_ARGUMENT:
         return "invalid_argument";
-    case CHARNESS_STATUS_OUT_OF_MEMORY:
+    case HIVE_STATUS_OUT_OF_MEMORY:
         return "out_of_memory";
-    case CHARNESS_STATUS_IO_ERROR:
+    case HIVE_STATUS_IO_ERROR:
         return "io_error";
-    case CHARNESS_STATUS_UNAVAILABLE:
+    case HIVE_STATUS_UNAVAILABLE:
         return "unavailable";
-    case CHARNESS_STATUS_NEEDS_APPROVAL:
+    case HIVE_STATUS_NEEDS_APPROVAL:
         return "needs_approval";
-    case CHARNESS_STATUS_CANCELLED:
+    case HIVE_STATUS_CANCELLED:
         return "cancelled";
     default:
         return "unknown";
     }
 }
 
-const char *charness_agent_kind_to_string(charness_agent_kind_t kind)
+const char *hive_agent_kind_to_string(hive_agent_kind_t kind)
 {
     switch (kind) {
-    case CHARNESS_AGENT_ORCHESTRATOR:
+    case HIVE_AGENT_ORCHESTRATOR:
         return "Orchestrator";
-    case CHARNESS_AGENT_PLANNER:
+    case HIVE_AGENT_PLANNER:
         return "Planner";
-    case CHARNESS_AGENT_CODER:
+    case HIVE_AGENT_CODER:
         return "Coder";
-    case CHARNESS_AGENT_TESTER:
+    case HIVE_AGENT_TESTER:
         return "Tester";
-    case CHARNESS_AGENT_VERIFIER:
+    case HIVE_AGENT_VERIFIER:
         return "Verifier";
-    case CHARNESS_AGENT_EDITOR:
+    case HIVE_AGENT_EDITOR:
         return "Editor";
     default:
         return "Unknown";
