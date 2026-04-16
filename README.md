@@ -8,8 +8,8 @@ It includes structured JSON logging, a pluggable inference adapter, a tool regis
 
 - Strict C23 build settings with `-Wall -Wextra -Werror -pedantic`
 - MIT license
-- CMake 3.22+ build system with Ninja support
-- Linux-first implementation with macOS/Windows-friendly CMake feature detection
+- GNU Make build system with auto-detected optional dependencies
+- Linux-first implementation with portable feature detection
 - Dummy inference adapter that echoes prompts so the project runs out of the box
 - Dedicated agents for Orchestrator, Planner, Coder, Tester, Verifier, and Editor
 - Evaluator/Reflexion loop that scores and critiques each output
@@ -22,23 +22,27 @@ It includes structured JSON logging, a pluggable inference adapter, a tool regis
 make build
 ```
 
-If you want the direct CMake invocation instead:
+The Makefile builds directly with `cc`/`gcc` and auto-enables optional features when their dependencies are available.
+
+Optional features are enabled automatically when their dependencies are present, and you can force them on or off with `auto`, `1`, or `0`.
+
+- `ncurses` enables the TUI when `HIVE_ENABLE_TUI=auto`.
+- `libuv` + `cJSON` enable the API server when `HIVE_ENABLE_API=auto`.
+- `argp` and `syslog` are detected automatically.
+
+Examples:
 
 ```sh
-cmake -S . -B build -G Ninja
-cmake --build build
+make HIVE_ENABLE_TUI=0
+make HIVE_ENABLE_API=1
+make HIVE_ENABLE_SYSLOG=0
+make run
 ```
 
-Optional features are enabled automatically when their dependencies are present.
-
-- `ncurses` enables the TUI when `HIVE_ENABLE_TUI=ON`.
-- `libuv` + `cJSON` enable the API server when `HIVE_ENABLE_API=ON`.
-
-Example with the API server enabled:
+Run the binary directly if you prefer:
 
 ```sh
-cmake -S . -B build -G Ninja -DHIVE_ENABLE_API=ON
-cmake --build build
+./build/hive --prompt "Create a safe C23 agent harness skeleton"
 ```
 
 ## CLI usage
