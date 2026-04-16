@@ -1,0 +1,9 @@
+# hive project rules
+
+workspace_root = "."
+safety_policy = "approval_required_for_every_tool"
+iteration_budget = 3
+focus = "correctness security style test_coverage"
+inference_mode = "mock_echo_until_custom_adapter_is_plugged_in"
+
+These rules are read as plain text context and can be extended freely.
