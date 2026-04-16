@@ -7,6 +7,7 @@
 #include "api/server.h"
 #include "core/runtime.h"
 #include "tui/tui.h"
+#include "raygui/raygui.h"
 
 #if HIVE_HAVE_ARGP
 #include <argp.h>
@@ -40,6 +41,7 @@ static void set_defaults(hive_cli_state_t *state)
     state->runtime_options.max_iterations = 3U;
     state->runtime_options.auto_approve = false;
     state->runtime_options.enable_tui = false;
+    state->runtime_options.enable_raygui = false;
     state->runtime_options.enable_api = false;
     state->runtime_options.use_mock_inference = true;
     state->runtime_options.enable_syslog = true;
@@ -75,6 +77,7 @@ static void print_help(FILE *stream, const char *program_name)
             "  --iterations N      Set the maximum refinement loops\n"
             "  --yes               Auto-approve tool execution in headless mode\n"
             "  --tui               Launch the ncurses TUI\n"
+            "  --raygui            Launch the RayGUI (VSCode-style) GUI\n"
             "  --api               Launch the optional API server\n"
             "  --api-bind ADDR     Bind address for the API server\n"
             "  --api-port PORT     Bind port for the API server\n"
@@ -97,6 +100,7 @@ static const struct argp_option argp_options[] = {
     {"iterations", 'i', "N", 0, "Set the maximum refinement loops", 0},
     {"yes", 'y', 0, 0, "Auto-approve tool execution in headless mode", 0},
     {"tui", 't', 0, 0, "Launch the ncurses TUI", 0},
+    {"raygui", 'g', 0, 0, "Launch the RayGUI VSCode-style GUI", 0},
     {"api", 'a', 0, 0, "Launch the optional API server", 0},
     {"api-bind", 1000, "ADDR", 0, "Bind address for the API server", 0},
     {"api-port", 1001, "PORT", 0, "Bind port for the API server", 0},
@@ -129,6 +133,9 @@ static error_t parse_argp_option(int key, char *arg, struct argp_state *state)
         break;
     case 't':
         cli_state->runtime_options.enable_tui = true;
+        break;
+    case 'g':
+        cli_state->runtime_options.enable_raygui = true;
         break;
     case 'a':
         cli_state->runtime_options.enable_api = true;
@@ -169,10 +176,21 @@ static const struct argp argp_parser = {
 
 static hive_status_t run_application(const char *program_name, hive_cli_state_t *state)
 {
-    if (state->runtime_options.enable_tui && state->runtime_options.enable_api) {
-        fprintf(stderr, "hive: --tui and --api are mutually exclusive\n");
+    int mode_count = 0;
+    mode_count += state->runtime_options.enable_tui ? 1 : 0;
+    mode_count += state->runtime_options.enable_api ? 1 : 0;
+    mode_count += state->runtime_options.enable_raygui ? 1 : 0;
+    if (mode_count > 1) {
+        fprintf(stderr, "hive: --tui, --raygui and --api are mutually exclusive\n");
         return HIVE_STATUS_INVALID_ARGUMENT;
     }
+
+#if !HIVE_HAVE_RAYGUI
+    if (state->runtime_options.enable_raygui) {
+        fprintf(stderr, "hive: RayGUI support not compiled into this build; rebuild with HIVE_ENABLE_RAYGUI=1 and install raylib\n");
+        return HIVE_STATUS_UNAVAILABLE;
+    }
+#endif
 
     hive_runtime_t runtime;
     hive_status_t status = hive_runtime_init(&runtime, &state->runtime_options, program_name);
@@ -185,6 +203,8 @@ static hive_status_t run_application(const char *program_name, hive_cli_state_t 
         status = hive_api_server_run(&runtime);
     } else if (state->runtime_options.enable_tui) {
         status = hive_tui_run(&runtime);
+    } else if (state->runtime_options.enable_raygui) {
+        status = hive_raygui_run(&runtime);
     } else {
         status = hive_runtime_run(&runtime);
     }
@@ -212,6 +232,8 @@ hive_status_t hive_cli_run(int argc, char **argv)
             state.runtime_options.auto_approve = true;
         } else if (strcmp(argument, "--tui") == 0) {
             state.runtime_options.enable_tui = true;
+        } else if (strcmp(argument, "--raygui") == 0) {
+            state.runtime_options.enable_raygui = true;
         } else if (strcmp(argument, "--api") == 0) {
             state.runtime_options.enable_api = true;
         } else if (strcmp(argument, "--no-syslog") == 0) {

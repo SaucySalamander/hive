@@ -24,6 +24,7 @@ typedef struct hive_runtime_options {
     unsigned max_iterations;
     bool auto_approve;
     bool enable_tui;
+    bool enable_raygui;
     bool enable_api;
     bool use_mock_inference;
     bool enable_syslog;

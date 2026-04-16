@@ -7,6 +7,7 @@ BUILD_SENTINEL := $(BUILD_DIR)/.dir
 HIVE_ENABLE_TUI ?= auto
 HIVE_ENABLE_API ?= auto
 HIVE_ENABLE_SYSLOG ?= auto
+HIVE_ENABLE_RAYGUI ?= auto
 
 SOURCES := $(shell find $(SRC_DIR) -type f -name '*.c' | sort)
 OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
@@ -29,6 +30,9 @@ UV_CFLAGS := $(if $(UV_PKG),$(shell pkg-config --cflags $(UV_PKG) 2>/dev/null))
 UV_LIBS := $(if $(UV_PKG),$(shell pkg-config --libs $(UV_PKG) 2>/dev/null))
 CJSON_CFLAGS := $(if $(CJSON_PKG),$(shell pkg-config --cflags $(CJSON_PKG) 2>/dev/null))
 CJSON_LIBS := $(if $(CJSON_PKG),$(shell pkg-config --libs $(CJSON_PKG) 2>/dev/null))
+RAYLIB_PKG := $(strip $(shell for pkg in raylib; do if pkg-config --exists $$pkg 2>/dev/null; then echo $$pkg; break; fi; done))
+RAYLIB_CFLAGS := $(if $(RAYLIB_PKG),$(shell pkg-config --cflags $(RAYLIB_PKG) 2>/dev/null))
+RAYLIB_LIBS := $(if $(RAYLIB_PKG),$(shell pkg-config --libs $(RAYLIB_PKG) 2>/dev/null))
 
 ifeq ($(HIVE_ENABLE_TUI),auto)
 HIVE_HAVE_NCURSES := $(if $(NCURSES_PKG),1,0)
@@ -39,6 +43,18 @@ endif
 HIVE_HAVE_NCURSES := 1
 else
 HIVE_HAVE_NCURSES := 0
+endif
+
+# RayGUI (raylib) optional support
+ifeq ($(HIVE_ENABLE_RAYGUI),auto)
+HIVE_HAVE_RAYGUI := $(if $(RAYLIB_PKG),1,0)
+else ifeq ($(HIVE_ENABLE_RAYGUI),1)
+ifeq ($(RAYLIB_PKG),)
+$(error HIVE_ENABLE_RAYGUI=1 requested but no raylib package was found)
+endif
+HIVE_HAVE_RAYGUI := 1
+else
+HIVE_HAVE_RAYGUI := 0
 endif
 
 ifeq ($(HIVE_ENABLE_API),auto)
@@ -72,6 +88,7 @@ CPPFLAGS += -DHIVE_HAVE_SYSLOG=$(HIVE_HAVE_SYSLOG)
 CPPFLAGS += -DHIVE_HAVE_NCURSES=$(HIVE_HAVE_NCURSES)
 CPPFLAGS += -DHIVE_HAVE_LIBUV=$(HIVE_HAVE_API)
 CPPFLAGS += -DHIVE_HAVE_CJSON=$(HIVE_HAVE_API)
+CPPFLAGS += -DHIVE_HAVE_RAYGUI=$(HIVE_HAVE_RAYGUI)
 
 CFLAGS += $(COMMON_CFLAGS)
 LDLIBS += $(COMMON_LDLIBS)
@@ -79,6 +96,11 @@ LDLIBS += $(COMMON_LDLIBS)
 ifeq ($(HIVE_HAVE_NCURSES),1)
 CPPFLAGS += $(NCURSES_CFLAGS)
 LDLIBS += $(NCURSES_LIBS)
+endif
+
+ifeq ($(HIVE_HAVE_RAYGUI),1)
+CPPFLAGS += $(RAYLIB_CFLAGS)
+LDLIBS += $(RAYLIB_LIBS)
 endif
 
 ifeq ($(HIVE_HAVE_API),1)
