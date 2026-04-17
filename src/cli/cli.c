@@ -7,7 +7,12 @@
 #include "api/server.h"
 #include "core/runtime.h"
 #include "tui/tui.h"
+#if HIVE_HAVE_RAYGUI
 #include "raygui/raygui.h"
+#endif
+#if HIVE_HAVE_GTK4
+#include "gtk/hive_gtk.h"
+#endif
 
 #if HIVE_HAVE_ARGP
 #include <argp.h>
@@ -42,6 +47,7 @@ static void set_defaults(hive_cli_state_t *state)
     state->runtime_options.auto_approve = false;
     state->runtime_options.enable_tui = false;
     state->runtime_options.enable_raygui = false;
+    state->runtime_options.enable_gtk4 = false;
     state->runtime_options.enable_api = false;
     state->runtime_options.use_mock_inference = true;
     state->runtime_options.enable_syslog = true;
@@ -78,6 +84,7 @@ static void print_help(FILE *stream, const char *program_name)
             "  --yes               Auto-approve tool execution in headless mode\n"
             "  --tui               Launch the ncurses TUI\n"
             "  --raygui            Launch the RayGUI (VSCode-style) GUI\n"
+            "  --gtk               Launch the GTK4 GUI\n"
             "  --api               Launch the optional API server\n"
             "  --api-bind ADDR     Bind address for the API server\n"
             "  --api-port PORT     Bind port for the API server\n"
@@ -101,6 +108,7 @@ static const struct argp_option argp_options[] = {
     {"yes", 'y', 0, 0, "Auto-approve tool execution in headless mode", 0},
     {"tui", 't', 0, 0, "Launch the ncurses TUI", 0},
     {"raygui", 'g', 0, 0, "Launch the RayGUI VSCode-style GUI", 0},
+    {"gtk", 'k', 0, 0, "Launch the GTK4 GUI", 0},
     {"api", 'a', 0, 0, "Launch the optional API server", 0},
     {"api-bind", 1000, "ADDR", 0, "Bind address for the API server", 0},
     {"api-port", 1001, "PORT", 0, "Bind port for the API server", 0},
@@ -136,6 +144,9 @@ static error_t parse_argp_option(int key, char *arg, struct argp_state *state)
         break;
     case 'g':
         cli_state->runtime_options.enable_raygui = true;
+        break;
+    case 'k':
+        cli_state->runtime_options.enable_gtk4 = true;
         break;
     case 'a':
         cli_state->runtime_options.enable_api = true;
@@ -180,6 +191,7 @@ static hive_status_t run_application(const char *program_name, hive_cli_state_t 
     mode_count += state->runtime_options.enable_tui ? 1 : 0;
     mode_count += state->runtime_options.enable_api ? 1 : 0;
     mode_count += state->runtime_options.enable_raygui ? 1 : 0;
+    mode_count += state->runtime_options.enable_gtk4 ? 1 : 0;
     if (mode_count > 1) {
         fprintf(stderr, "hive: --tui, --raygui and --api are mutually exclusive\n");
         return HIVE_STATUS_INVALID_ARGUMENT;
@@ -188,6 +200,12 @@ static hive_status_t run_application(const char *program_name, hive_cli_state_t 
 #if !HIVE_HAVE_RAYGUI
     if (state->runtime_options.enable_raygui) {
         fprintf(stderr, "hive: RayGUI support not compiled into this build; rebuild with HIVE_ENABLE_RAYGUI=1 and install raylib\n");
+        return HIVE_STATUS_UNAVAILABLE;
+    }
+#endif
+#if !HIVE_HAVE_GTK4
+    if (state->runtime_options.enable_gtk4) {
+        fprintf(stderr, "hive: GTK4 support not compiled into this build; rebuild with HIVE_ENABLE_GTK4=1 and install gtk4\n");
         return HIVE_STATUS_UNAVAILABLE;
     }
 #endif
@@ -203,8 +221,12 @@ static hive_status_t run_application(const char *program_name, hive_cli_state_t 
         status = hive_api_server_run(&runtime);
     } else if (state->runtime_options.enable_tui) {
         status = hive_tui_run(&runtime);
+    } else if (state->runtime_options.enable_gtk4) {
+        status = hive_gtk_run(&runtime);
+#if HIVE_HAVE_RAYGUI
     } else if (state->runtime_options.enable_raygui) {
         status = hive_raygui_run(&runtime);
+#endif
     } else {
         status = hive_runtime_run(&runtime);
     }

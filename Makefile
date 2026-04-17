@@ -7,7 +7,8 @@ BUILD_SENTINEL := $(BUILD_DIR)/.dir
 HIVE_ENABLE_TUI ?= auto
 HIVE_ENABLE_API ?= auto
 HIVE_ENABLE_SYSLOG ?= auto
-HIVE_ENABLE_RAYGUI ?= auto
+HIVE_ENABLE_RAYGUI ?= 0
+HIVE_ENABLE_GTK4 ?= auto
 
 SOURCES := $(shell find $(SRC_DIR) -type f -name '*.c' | sort)
 OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
@@ -15,7 +16,7 @@ DEPFILES := $(OBJECTS:.o=.d)
 
 COMMON_CPPFLAGS := -D_POSIX_C_SOURCE=200809L -I$(SRC_DIR)
 COMMON_CFLAGS := -std=c23 -Wall -Wextra -Werror -pedantic -pthread
-COMMON_LDLIBS := -pthread
+COMMON_LDLIBS := -pthread -lm
 
 ARGP_AVAILABLE := $(shell printf '%s\n' '#define _GNU_SOURCE' '#include <argp.h>' 'int main(void) { return 0; }' | $(CC) $(COMMON_CPPFLAGS) -x c - -c -o /dev/null >/dev/null 2>&1 && echo 1 || echo 0)
 SYSLOG_AVAILABLE := $(shell printf '%s\n' '#include <syslog.h>' 'int main(void) { return 0; }' | $(CC) $(COMMON_CPPFLAGS) -x c - -c -o /dev/null >/dev/null 2>&1 && echo 1 || echo 0)
@@ -33,6 +34,9 @@ CJSON_LIBS := $(if $(CJSON_PKG),$(shell pkg-config --libs $(CJSON_PKG) 2>/dev/nu
 RAYLIB_PKG := $(strip $(shell for pkg in raylib; do if pkg-config --exists $$pkg 2>/dev/null; then echo $$pkg; break; fi; done))
 RAYLIB_CFLAGS := $(if $(RAYLIB_PKG),$(shell pkg-config --cflags $(RAYLIB_PKG) 2>/dev/null))
 RAYLIB_LIBS := $(if $(RAYLIB_PKG),$(shell pkg-config --libs $(RAYLIB_PKG) 2>/dev/null))
+GTK_PKG := $(strip $(shell for pkg in gtk4; do if pkg-config --exists $$pkg 2>/dev/null; then echo $$pkg; break; fi; done))
+GTK_CFLAGS := $(if $(GTK_PKG),$(shell pkg-config --cflags $(GTK_PKG) 2>/dev/null))
+GTK_LIBS := $(if $(GTK_PKG),$(shell pkg-config --libs $(GTK_PKG) 2>/dev/null))
 
 ifeq ($(HIVE_ENABLE_TUI),auto)
 HIVE_HAVE_NCURSES := $(if $(NCURSES_PKG),1,0)
@@ -45,7 +49,7 @@ else
 HIVE_HAVE_NCURSES := 0
 endif
 
-# RayGUI (raylib) optional support
+# RayGUI (raylib) optional support (disabled by default)
 ifeq ($(HIVE_ENABLE_RAYGUI),auto)
 HIVE_HAVE_RAYGUI := $(if $(RAYLIB_PKG),1,0)
 else ifeq ($(HIVE_ENABLE_RAYGUI),1)
@@ -55,6 +59,18 @@ endif
 HIVE_HAVE_RAYGUI := 1
 else
 HIVE_HAVE_RAYGUI := 0
+endif
+
+# GTK4 optional support
+ifeq ($(HIVE_ENABLE_GTK4),auto)
+HIVE_HAVE_GTK4 := $(if $(GTK_PKG),1,0)
+else ifeq ($(HIVE_ENABLE_GTK4),1)
+ifeq ($(GTK_PKG),)
+$(error HIVE_ENABLE_GTK4=1 requested but no gtk4 package was found)
+endif
+HIVE_HAVE_GTK4 := 1
+else
+HIVE_HAVE_GTK4 := 0
 endif
 
 ifeq ($(HIVE_ENABLE_API),auto)
@@ -89,6 +105,7 @@ CPPFLAGS += -DHIVE_HAVE_NCURSES=$(HIVE_HAVE_NCURSES)
 CPPFLAGS += -DHIVE_HAVE_LIBUV=$(HIVE_HAVE_API)
 CPPFLAGS += -DHIVE_HAVE_CJSON=$(HIVE_HAVE_API)
 CPPFLAGS += -DHIVE_HAVE_RAYGUI=$(HIVE_HAVE_RAYGUI)
+CPPFLAGS += -DHIVE_HAVE_GTK4=$(HIVE_HAVE_GTK4)
 
 CFLAGS += $(COMMON_CFLAGS)
 LDLIBS += $(COMMON_LDLIBS)
@@ -101,6 +118,11 @@ endif
 ifeq ($(HIVE_HAVE_RAYGUI),1)
 CPPFLAGS += $(RAYLIB_CFLAGS)
 LDLIBS += $(RAYLIB_LIBS)
+endif
+
+ifeq ($(HIVE_HAVE_GTK4),1)
+CPPFLAGS += $(GTK_CFLAGS)
+LDLIBS += $(GTK_LIBS)
 endif
 
 ifeq ($(HIVE_HAVE_API),1)

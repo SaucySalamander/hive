@@ -1,6 +1,6 @@
 # hive
 
-`hive` (Human Interactive Verification Engine) is a C23 repository skeleton for a safety-gated, hierarchical agent runtime built around a pure C state machine.
+`hive` (Harness for Interactive Verification & Execution) is a C23 repository skeleton for a safety-gated, hierarchical agent runtime built around a pure C state machine.
 
 It includes structured JSON logging, a pluggable inference adapter, a tool registry with approval gates, a headless CLI using `argp` on GNU systems, an ncurses-based TUI, and an optional libuv/cJSON API server that stays disabled by default.
 
