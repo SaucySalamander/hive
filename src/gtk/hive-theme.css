@@ -1,0 +1,319 @@
+/* ================================================================
+ * Hive GTK4 Theme — design-token-driven, light + dark
+ * ================================================================
+ *
+ * Colour token names follow the prefix  hive_*  so they never
+ * clash with GTK's own named colours.
+ *
+ * Light-mode values are defined here; dark-mode overrides follow
+ * at the bottom via the manual  window.hive-dark  class so that
+ * programmatic toggling from C is trivial.
+ * ================================================================ */
+
+/* ----------------------------------------------------------------
+ * Colour tokens
+ * ---------------------------------------------------------------- */
+@define-color hive_primary          #F5A623;
+@define-color hive_primary_hover    #E09510;
+@define-color hive_primary_alpha    alpha(#F5A623, 0.15);
+
+@define-color hive_surface0         #FFFFFF;
+@define-color hive_surface1         #F2F2F7;
+@define-color hive_surface2         #E5E5EA;
+@define-color hive_border           #C7C7CC;
+
+@define-color hive_text             #1C1C1E;
+@define-color hive_text_secondary   #6C6C70;
+
+@define-color hive_success          #34C759;
+@define-color hive_error            #FF3B30;
+@define-color hive_warning          #FF9500;
+
+/* ----------------------------------------------------------------
+ * Typography
+ *
+ * The bundled CothamSans.otf (assets/fonts/) is available in the
+ * GResource at /org/hive/hive/fonts/CothamSans.otf for programmatic
+ * use, but GTK4's CSS engine does not support @font-face loading.
+ * To activate it, register the font via fontconfig before the first
+ * render and call pango_fc_font_map_cache_clear().  For now the
+ * window falls back to the system UI font.
+ * ---------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------
+ * Window / root
+ * ---------------------------------------------------------------- */
+window.hive-window {
+    background-color: @hive_surface0;
+    color: @hive_text;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+}
+
+/* ----------------------------------------------------------------
+ * Header bar
+ * ---------------------------------------------------------------- */
+headerbar {
+    background-color: @hive_surface1;
+    border-bottom: 1px solid @hive_border;
+    min-height: 48px;
+    padding: 0 8px;
+}
+
+headerbar .title {
+    font-weight: 600;
+    font-size: 15px;
+    color: @hive_text;
+}
+
+/* ----------------------------------------------------------------
+ * Sidebar / NavList
+ * ---------------------------------------------------------------- */
+.hive-sidebar {
+    background-color: @hive_surface1;
+    border-right: 1px solid @hive_border;
+}
+
+.hive-sidebar > viewport,
+.hive-sidebar > undershoot,
+.hive-sidebar > overshoot {
+    background-color: @hive_surface1;
+}
+
+.hive-sidebar list,
+.hive-sidebar listbox {
+    background-color: transparent;
+}
+
+.hive-sidebar list row,
+.hive-sidebar listbox row {
+    padding: 6px 12px;
+    border-radius: 6px;
+    margin: 2px 6px;
+    color: @hive_text;
+    transition: background-color 80ms ease;
+}
+
+.hive-sidebar list row:hover,
+.hive-sidebar listbox row:hover {
+    background-color: @hive_surface2;
+}
+
+.hive-sidebar list row:selected,
+.hive-sidebar listbox row:selected {
+    background-color: @hive_primary_alpha;
+    color: @hive_primary;
+}
+
+.hive-nav-badge {
+    background-color: @hive_primary;
+    color: white;
+    border-radius: 99px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 18px;
+}
+
+/* ----------------------------------------------------------------
+ * Session rows
+ * ---------------------------------------------------------------- */
+.hive-session-row {
+    border-bottom: 1px solid @hive_surface2;
+    transition: background-color 80ms ease;
+}
+
+.hive-session-row:hover {
+    background-color: @hive_surface2;
+}
+
+.hive-session-row:selected,
+.hive-session-row:active {
+    background-color: @hive_primary_alpha;
+}
+
+.hive-session-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.hive-session-subtitle {
+    font-size: 12px;
+    color: @hive_text_secondary;
+}
+
+/* ----------------------------------------------------------------
+ * Inspector pane
+ * ---------------------------------------------------------------- */
+.hive-inspector {
+    background-color: @hive_surface1;
+    border-left: 1px solid @hive_border;
+}
+
+.hive-inspector > viewport {
+    background-color: @hive_surface1;
+}
+
+.hive-inspector-key {
+    font-size: 12px;
+    color: @hive_text_secondary;
+}
+
+.hive-inspector-value {
+    font-size: 12px;
+    color: @hive_text;
+}
+
+expander > title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: @hive_text_secondary;
+    padding: 8px 0 4px;
+}
+
+/* ----------------------------------------------------------------
+ * Search bar
+ * ---------------------------------------------------------------- */
+searchbar {
+    background-color: @hive_surface1;
+    border-bottom: 1px solid @hive_border;
+}
+
+searchentry {
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+/* ----------------------------------------------------------------
+ * Buttons
+ * ---------------------------------------------------------------- */
+button {
+    border-radius: 6px;
+    padding: 5px 14px;
+    font-size: 13px;
+    transition: background-color 100ms ease, box-shadow 100ms ease;
+}
+
+button.suggested-action {
+    background-color: @hive_primary;
+    color: white;
+    border: none;
+    font-weight: 600;
+}
+
+button.suggested-action:hover {
+    background-color: @hive_primary_hover;
+}
+
+button.suggested-action:disabled {
+    background-color: alpha(@hive_primary, 0.4);
+    color: alpha(white, 0.6);
+}
+
+button.destructive-action {
+    background-color: @hive_error;
+    color: white;
+    border: none;
+}
+
+/* ----------------------------------------------------------------
+ * Status bar
+ * ---------------------------------------------------------------- */
+.hive-statusbar {
+    background-color: @hive_surface1;
+    border-top: 1px solid @hive_border;
+    padding: 3px 12px;
+    font-size: 12px;
+    color: @hive_text_secondary;
+}
+
+/* ----------------------------------------------------------------
+ * GtkPaned handle
+ * ---------------------------------------------------------------- */
+paned > separator {
+    background-color: @hive_border;
+    min-width: 1px;
+    min-height: 1px;
+}
+
+/* ----------------------------------------------------------------
+ * Dark mode — activated by  window.hive-dark  CSS class
+ * ---------------------------------------------------------------- */
+window.hive-dark {
+    background-color: #1C1C1E;
+    color: #F2F2F7;
+}
+
+window.hive-dark headerbar {
+    background-color: #2C2C2E;
+    border-bottom-color: #48484A;
+}
+
+window.hive-dark .hive-sidebar {
+    background-color: #2C2C2E;
+    border-right-color: #48484A;
+}
+
+window.hive-dark .hive-sidebar > viewport,
+window.hive-dark .hive-sidebar > undershoot,
+window.hive-dark .hive-sidebar > overshoot,
+window.hive-dark .hive-sidebar list,
+window.hive-dark .hive-sidebar listbox {
+    background-color: #2C2C2E;
+}
+
+window.hive-dark .hive-sidebar list row,
+window.hive-dark .hive-sidebar listbox row {
+    color: #F2F2F7;
+}
+
+window.hive-dark .hive-sidebar list row:hover,
+window.hive-dark .hive-sidebar listbox row:hover {
+    background-color: #3A3A3C;
+}
+
+window.hive-dark .hive-inspector {
+    background-color: #2C2C2E;
+    border-left-color: #48484A;
+}
+
+window.hive-dark .hive-inspector > viewport {
+    background-color: #2C2C2E;
+}
+
+window.hive-dark .hive-inspector-key {
+    color: #AEAEB2;
+}
+
+window.hive-dark .hive-inspector-value {
+    color: #F2F2F7;
+}
+
+window.hive-dark .hive-statusbar {
+    background-color: #2C2C2E;
+    border-top-color: #48484A;
+    color: #AEAEB2;
+}
+
+window.hive-dark searchbar {
+    background-color: #2C2C2E;
+    border-bottom-color: #48484A;
+}
+
+window.hive-dark paned > separator {
+    background-color: #48484A;
+}
+
+window.hive-dark .hive-session-row {
+    border-bottom-color: #3A3A3C;
+}
+
+window.hive-dark .hive-session-title {
+    color: #F2F2F7;
+}
+
+window.hive-dark .hive-session-subtitle {
+    color: #AEAEB2;
+}

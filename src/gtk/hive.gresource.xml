@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/hive/hive">
+    <!--
+      hive-theme.css is in the same directory as this XML file (src/gtk/).
+      glib-compile-resources is invoked with --sourcedir=$(SRC_DIR)/gtk
+      so the filename is resolved from there.
+    -->
+    <file>hive-theme.css</file>
+
+    <!--
+      CothamSans.otf lives in assets/fonts/.
+      The Makefile passes --sourcedir=assets/fonts so only the basename
+      is needed here; the alias places it at the expected resource path.
+    -->
+    <file alias="fonts/CothamSans.otf">CothamSans.otf</file>
+  </gresource>
+</gresources>

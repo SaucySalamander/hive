@@ -121,8 +121,12 @@ LDLIBS += $(RAYLIB_LIBS)
 endif
 
 ifeq ($(HIVE_HAVE_GTK4),1)
-CPPFLAGS += $(GTK_CFLAGS)
-LDLIBS += $(GTK_LIBS)
+GRESOURCE_XML   := $(SRC_DIR)/gtk/hive.gresource.xml
+GRESOURCE_C     := $(BUILD_DIR)/gtk/hive_resources.c
+GRESOURCE_O     := $(BUILD_DIR)/gtk/hive_resources.o
+OBJECTS         += $(GRESOURCE_O)
+CPPFLAGS        += $(GTK_CFLAGS)
+LDLIBS          += $(GTK_LIBS)
 endif
 
 ifeq ($(HIVE_HAVE_API),1)
@@ -154,5 +158,29 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 rebuild: clean build
+
+# ----------------------------------------------------------------
+# GResource compilation (GTK4 only)
+# Embeds hive-theme.css and assets/fonts/CothamSans.otf into the binary.
+# ----------------------------------------------------------------
+ifeq ($(HIVE_HAVE_GTK4),1)
+$(GRESOURCE_C): $(GRESOURCE_XML) \
+                $(SRC_DIR)/gtk/hive-theme.css \
+                assets/fonts/CothamSans.otf \
+                | $(BUILD_SENTINEL)
+	mkdir -p $(@D)
+	glib-compile-resources \
+	    --generate-source \
+	    --target=$@ \
+	    --sourcedir=$(SRC_DIR)/gtk \
+	    --sourcedir=assets/fonts \
+	    $<
+
+# Compile the generated C without the project's strict warning flags to
+# avoid -Werror failures on auto-generated code.
+$(GRESOURCE_O): $(GRESOURCE_C) | $(BUILD_SENTINEL)
+	mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) -c $< -o $@
+endif
 
 -include $(DEPFILES)
