@@ -13,21 +13,27 @@
 /* ----------------------------------------------------------------
  * Colour tokens
  * ---------------------------------------------------------------- */
-@define-color hive_primary          #F5A623;
-@define-color hive_primary_hover    #E09510;
-@define-color hive_primary_alpha    alpha(#F5A623, 0.15);
+@define-color hive_primary          #E8960D;
+@define-color hive_primary_hover    #C97F00;
+@define-color hive_primary_alpha    alpha(#E8960D, 0.14);
 
-@define-color hive_surface0         #FFFFFF;
-@define-color hive_surface1         #F2F2F7;
-@define-color hive_surface2         #E5E5EA;
-@define-color hive_border           #C7C7CC;
+/* Content area and palette colors from the updated Figma page */
+@define-color hive_surface0         #FAF7E8;
+@define-color hive_surface1         #F0F0B5;
+@define-color hive_surface2         #E4DCAC;
+@define-color hive_border           #D8CFA1;
 
-@define-color hive_text             #1C1C1E;
-@define-color hive_text_secondary   #6C6C70;
+/* Headerbar — dark so items are always readable */
+@define-color hive_headerbar_bg     #222226;
+@define-color hive_headerbar_fg     #EBEBED;
+@define-color hive_headerbar_border #3A3A3F;
 
-@define-color hive_success          #34C759;
-@define-color hive_error            #FF3B30;
-@define-color hive_warning          #FF9500;
+@define-color hive_text             #2F2A1B;
+@define-color hive_text_secondary   #6C6548;
+
+@define-color hive_success          #2DB550;
+@define-color hive_error            #D93025;
+@define-color hive_warning          #E07B00;
 
 /* ----------------------------------------------------------------
  * Typography
@@ -50,20 +56,70 @@ window.hive-window {
     font-size: 14px;
 }
 
+.hive-agent-page,
+.hive-agent-board,
+.hive-agent-board-shell,
+.hive-agent-stats {
+    background-color: @hive_surface0;
+}
+
+.hive-agent-board-shell {
+    border: 1px solid alpha(@hive_border, 0.35);
+}
+
+.hive-session-panel {
+    background-color: @hive_surface1;
+    border-left: 1px solid alpha(@hive_border, 0.55);
+}
+
 /* ----------------------------------------------------------------
- * Header bar
+ * Header bar  (dark surface — guarantees contrast in light mode)
  * ---------------------------------------------------------------- */
 headerbar {
-    background-color: @hive_surface1;
-    border-bottom: 1px solid @hive_border;
-    min-height: 48px;
-    padding: 0 8px;
+    background-color: @hive_headerbar_bg;
+    border-bottom: 1px solid @hive_headerbar_border;
+    color: @hive_headerbar_fg;
+    min-height: 46px;
+    padding: 0 6px;
 }
 
 headerbar .title {
     font-weight: 600;
     font-size: 15px;
-    color: @hive_text;
+    color: @hive_headerbar_fg;
+}
+
+/* Icon buttons in the headerbar (search, theme toggle, window controls) */
+headerbar button:not(.suggested-action):not(.destructive-action) {
+    background-color: alpha(white, 0.07);
+    border: 1px solid alpha(white, 0.13);
+    color: @hive_headerbar_fg;
+    border-radius: 6px;
+    padding: 5px 8px;
+    transition: background-color 100ms ease, border-color 100ms ease;
+}
+
+headerbar button:not(.suggested-action):not(.destructive-action):hover {
+    background-color: alpha(white, 0.14);
+    border-color: alpha(white, 0.22);
+}
+
+headerbar button:not(.suggested-action):not(.destructive-action):active,
+headerbar button:not(.suggested-action):not(.destructive-action):checked {
+    background-color: alpha(@hive_primary, 0.30);
+    border-color: alpha(@hive_primary, 0.50);
+    color: @hive_primary;
+}
+
+/* Window close/min/max buttons */
+headerbar windowcontrols button {
+    background-color: alpha(white, 0.10);
+    border: 1px solid alpha(white, 0.18);
+    color: @hive_headerbar_fg;
+}
+
+headerbar windowcontrols button:hover {
+    background-color: alpha(white, 0.20);
 }
 
 /* ----------------------------------------------------------------
@@ -116,6 +172,33 @@ headerbar .title {
 }
 
 /* ----------------------------------------------------------------
+ * Bottom navigation (mobile/compact-style tabs at the bottom)
+ * ---------------------------------------------------------------- */
+.hive-bottom-nav {
+    background-color: @hive_surface1;
+    border-top: 1px solid @hive_border;
+    padding: 8px 12px;
+}
+
+.hive-bottom-nav button {
+    border-radius: 8px;
+    padding: 6px 12px;
+    margin: 0 6px;
+    background-color: transparent;
+    color: @hive_text_secondary;
+}
+
+.hive-bottom-nav button:hover {
+    background-color: @hive_surface2;
+}
+
+.hive-bottom-nav button.nav-active {
+    background-color: @hive_primary;
+    color: white;
+    font-weight: 600;
+}
+
+/* ----------------------------------------------------------------
  * Session rows
  * ---------------------------------------------------------------- */
 .hive-session-row {
@@ -140,6 +223,189 @@ headerbar .title {
 .hive-session-subtitle {
     font-size: 12px;
     color: @hive_text_secondary;
+}
+
+/* ----------------------------------------------------------------
+ * Intake / queen surface
+ * ---------------------------------------------------------------- */
+.hive-intake-page {
+    background-color: @hive_surface0;
+}
+
+.hive-intake-hero {
+    background: linear-gradient(180deg, alpha(@hive_primary, 0.14), alpha(@hive_primary, 0.05));
+    border: 1px solid alpha(@hive_border, 0.55);
+    border-radius: 16px;
+    padding: 16px 18px;
+}
+
+.hive-intake-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: @hive_text;
+}
+
+.hive-intake-subtitle {
+    font-size: 13px;
+    color: @hive_text_secondary;
+}
+
+.hive-intake-metrics {
+    margin-top: 2px;
+}
+
+.hive-intake-metrics > box {
+    background-color: @hive_surface1;
+    border: 1px solid alpha(@hive_border, 0.55);
+    border-radius: 12px;
+    padding: 10px 12px;
+    min-width: 150px;
+}
+
+.hive-intake-metric-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: @hive_text_secondary;
+}
+
+.hive-intake-metric-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: @hive_text;
+}
+
+.hive-intake-card {
+    background-color: @hive_surface1;
+    border: 1px solid alpha(@hive_border, 0.6);
+    border-radius: 16px;
+    padding: 14px;
+}
+
+.hive-intake-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: @hive_text_secondary;
+    margin-top: 8px;
+}
+
+.hive-intake-status {
+    font-size: 12px;
+    color: @hive_text_secondary;
+    padding: 4px 2px 0;
+}
+
+/* ----------------------------------------------------------------
+ * Knowledge / corpus explorer
+ * ---------------------------------------------------------------- */
+.hive-knowledge-page {
+    background-color: @hive_surface0;
+}
+
+.hive-knowledge-hero {
+    background: linear-gradient(180deg, alpha(@hive_primary, 0.12), alpha(@hive_primary, 0.04));
+    border: 1px solid alpha(@hive_border, 0.55);
+    border-radius: 16px;
+    padding: 16px 18px;
+}
+
+.hive-knowledge-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: @hive_text;
+}
+
+.hive-knowledge-subtitle {
+    font-size: 13px;
+    color: @hive_text_secondary;
+}
+
+.hive-knowledge-chips {
+    margin-top: 2px;
+}
+
+.hive-knowledge-chip {
+    border-radius: 99px;
+    padding: 4px 10px;
+    background-color: @hive_surface1;
+    border: 1px solid alpha(@hive_border, 0.55);
+    color: @hive_text_secondary;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.hive-knowledge-columns {
+    margin-top: 2px;
+}
+
+.hive-knowledge-card {
+    background-color: @hive_surface1;
+    border: 1px solid alpha(@hive_border, 0.60);
+    border-radius: 16px;
+    padding: 14px;
+}
+
+.hive-knowledge-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: @hive_text;
+}
+
+.hive-knowledge-card-subtitle {
+    font-size: 12px;
+    color: @hive_text_secondary;
+}
+
+.hive-knowledge-key {
+    font-size: 12px;
+    color: @hive_text_secondary;
+}
+
+.hive-knowledge-value {
+    font-size: 12px;
+    color: @hive_text;
+}
+
+.hive-knowledge-list,
+.hive-knowledge-data-grid {
+    background-color: transparent;
+}
+
+.hive-knowledge-scroll > viewport,
+.hive-knowledge-scroll > undershoot,
+.hive-knowledge-scroll > overshoot {
+    background-color: transparent;
+}
+
+window.hive-dark .hive-knowledge-page {
+    background-color: #18181B;
+}
+
+window.hive-dark .hive-knowledge-hero {
+    background: linear-gradient(180deg, alpha(#E8960D, 0.16), alpha(#E8960D, 0.06));
+    border-color: #38383D;
+}
+
+window.hive-dark .hive-knowledge-title {
+    color: #F0F0F2;
+}
+
+window.hive-dark .hive-knowledge-subtitle,
+window.hive-dark .hive-knowledge-chip,
+window.hive-dark .hive-knowledge-key {
+    color: #9A9AA4;
+}
+
+window.hive-dark .hive-knowledge-chip,
+window.hive-dark .hive-knowledge-card {
+    background-color: #222226;
+    border-color: #38383D;
+}
+
+window.hive-dark .hive-knowledge-value {
+    color: #F0F0F2;
 }
 
 /* ----------------------------------------------------------------
@@ -242,18 +508,18 @@ paned > separator {
  * Dark mode — activated by  window.hive-dark  CSS class
  * ---------------------------------------------------------------- */
 window.hive-dark {
-    background-color: #1C1C1E;
-    color: #F2F2F7;
+    background-color: #18181B;
+    color: #F0F0F2;
 }
 
 window.hive-dark headerbar {
-    background-color: #2C2C2E;
-    border-bottom-color: #48484A;
+    background-color: #111114;
+    border-bottom-color: #2E2E33;
 }
 
 window.hive-dark .hive-sidebar {
-    background-color: #2C2C2E;
-    border-right-color: #48484A;
+    background-color: #222226;
+    border-right-color: #38383D;
 }
 
 window.hive-dark .hive-sidebar > viewport,
@@ -261,59 +527,183 @@ window.hive-dark .hive-sidebar > undershoot,
 window.hive-dark .hive-sidebar > overshoot,
 window.hive-dark .hive-sidebar list,
 window.hive-dark .hive-sidebar listbox {
-    background-color: #2C2C2E;
+    background-color: #222226;
 }
 
 window.hive-dark .hive-sidebar list row,
 window.hive-dark .hive-sidebar listbox row {
-    color: #F2F2F7;
+    color: #F0F0F2;
 }
 
 window.hive-dark .hive-sidebar list row:hover,
 window.hive-dark .hive-sidebar listbox row:hover {
-    background-color: #3A3A3C;
+    background-color: #2E2E33;
 }
 
 window.hive-dark .hive-inspector {
-    background-color: #2C2C2E;
-    border-left-color: #48484A;
+    background-color: #222226;
+    border-left-color: #38383D;
 }
 
 window.hive-dark .hive-inspector > viewport {
-    background-color: #2C2C2E;
+    background-color: #222226;
 }
 
 window.hive-dark .hive-inspector-key {
-    color: #AEAEB2;
+    color: #9A9AA4;
 }
 
 window.hive-dark .hive-inspector-value {
-    color: #F2F2F7;
+    color: #F0F0F2;
 }
 
 window.hive-dark .hive-statusbar {
-    background-color: #2C2C2E;
-    border-top-color: #48484A;
-    color: #AEAEB2;
+    background-color: #111114;
+    border-top-color: #2E2E33;
+    color: #9A9AA4;
 }
 
 window.hive-dark searchbar {
-    background-color: #2C2C2E;
-    border-bottom-color: #48484A;
+    background-color: #222226;
+    border-bottom-color: #38383D;
 }
 
 window.hive-dark paned > separator {
-    background-color: #48484A;
+    background-color: #38383D;
 }
 
 window.hive-dark .hive-session-row {
-    border-bottom-color: #3A3A3C;
+    border-bottom-color: #2E2E33;
 }
 
 window.hive-dark .hive-session-title {
-    color: #F2F2F7;
+    color: #F0F0F2;
 }
 
 window.hive-dark .hive-session-subtitle {
-    color: #AEAEB2;
+    color: #9A9AA4;
+}
+
+window.hive-dark .hive-intake-page {
+    background-color: #18181B;
+}
+
+window.hive-dark .hive-intake-hero {
+    background: linear-gradient(180deg, alpha(#E8960D, 0.18), alpha(#E8960D, 0.08));
+    border-color: #38383D;
+}
+
+window.hive-dark .hive-intake-title {
+    color: #F0F0F2;
+}
+
+window.hive-dark .hive-intake-subtitle,
+window.hive-dark .hive-intake-metric-label,
+window.hive-dark .hive-intake-status {
+    color: #9A9AA4;
+}
+
+window.hive-dark .hive-intake-metrics > box,
+window.hive-dark .hive-intake-card {
+    background-color: #222226;
+    border-color: #38383D;
+}
+
+window.hive-dark .hive-intake-metric-value {
+    color: #F0F0F2;
+}
+
+/* Dark mode — bottom nav and agent board */
+window.hive-dark .hive-bottom-nav {
+    background-color: #1E1E22;
+    border-top-color: #38383D;
+}
+
+window.hive-dark .hive-bottom-nav button {
+    color: #9A9AA4;
+}
+
+window.hive-dark .hive-bottom-nav button:hover {
+    background-color: #2E2E33;
+}
+
+window.hive-dark .hive-agent-page,
+window.hive-dark .hive-agent-board,
+window.hive-dark .hive-agent-board-shell {
+    background-color: #18181B;
+}
+
+window.hive-dark .hive-agent-board-shell {
+    border-color: #38383D;
+}
+
+/* ----------------------------------------------------------------
+ * Dynamics: Stats strip
+ * ---------------------------------------------------------------- */
+.hive-stats-strip {
+    padding: 6px 8px;
+    background-color: @hive_surface1;
+    border-bottom: 1px solid alpha(@hive_border, 0.45);
+}
+
+window.hive-dark .hive-stats-strip {
+    background-color: #222226;
+    border-bottom-color: #38383D;
+}
+
+.hive-stats-label {
+    font-size: 12px;
+    color: @hive_text_secondary;
+    padding: 2px 6px;
+}
+
+window.hive-dark .hive-stats-label {
+    color: #9A9AA4;
+}
+
+.hive-stats-alarm {
+    color: @hive_error;
+    font-weight: 600;
+}
+
+/* ----------------------------------------------------------------
+ * Dynamics: Role badges (color-coded pills)
+ * ---------------------------------------------------------------- */
+.hive-role-badge {
+    border-radius: 99px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    min-width: 24px;
+}
+
+.hive-badge-queen   { background-color: #E8870F; }
+.hive-badge-forager  { background-color: #66BA6B; }
+.hive-badge-builder  { background-color: #619AD9; }
+.hive-badge-nurse    { background-color: #C77AC7; }
+.hive-badge-guard    { background-color: #D9544F; }
+.hive-badge-cleaner  { background-color: #9E9E9E; }
+.hive-badge-drone    { background-color: #F2C459; color: #3A3000; }
+
+/* ----------------------------------------------------------------
+ * Dynamics: Legend strip
+ * ---------------------------------------------------------------- */
+.hive-legend-strip {
+    padding: 2px 8px;
+}
+
+.hive-legend-swatch {
+    border-radius: 3px;
+    min-width: 12px;
+    min-height: 12px;
+}
+
+.hive-legend-label {
+    font-size: 11px;
+    color: @hive_text_secondary;
+}
+
+window.hive-dark .hive-legend-label {
+    color: #9A9AA4;
 }

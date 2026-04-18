@@ -1,5 +1,7 @@
 #include "inference/adapter.h"
 
+#include "inference/inference.h"
+
 #include "logging/logger.h"
 
 #include <ctype.h>
@@ -8,11 +10,29 @@
 
 typedef struct hive_mock_inference_state {
     struct hive_logger *logger;
+    inf_ctx_t *ctx;
 } hive_mock_inference_state_t;
 
 static const char *safe_text(const char *text)
 {
     return text != NULL ? text : "";
+}
+
+static hive_status_t map_inf_result(int result)
+{
+    switch (result) {
+    case INF_OK:
+        return HIVE_STATUS_OK;
+    case INF_ERR_CANCELLED:
+        return HIVE_STATUS_CANCELLED;
+    case INF_ERR_TIMEOUT:
+        return HIVE_STATUS_IO_ERROR;
+    case INF_ERR_BACKEND:
+        return HIVE_STATUS_UNAVAILABLE;
+    case INF_ERR:
+    default:
+        return HIVE_STATUS_ERROR;
+    }
 }
 
 static size_t estimate_tokens(const char *text)
@@ -50,15 +70,34 @@ static hive_status_t mock_generate(void *state,
                              safe_text(request->agent_name));
     }
 
-    char *payload = hive_string_format(
-        "[mock:%s]\n\n[system]\n%s\n\n[user]\n%s\n\n[context]\n%s\n",
-        safe_text(request->agent_name),
-        safe_text(request->system_prompt),
-        safe_text(request->user_prompt),
-        safe_text(request->context));
+    inf_message_t messages[3] = {
+        { .role = "system", .content = safe_text(request->system_prompt) },
+        { .role = "user", .content = safe_text(request->user_prompt) },
+        { .role = "context", .content = safe_text(request->context) },
+    };
 
-    if (payload == NULL) {
-        return HIVE_STATUS_OUT_OF_MEMORY;
+    inf_request_t inf_request = {
+        .model = safe_text(request->agent_name),
+        .messages = messages,
+        .n_messages = 3U,
+        .temperature = 0.0,
+        .max_tokens = 0,
+        .user = safe_text(request->agent_name),
+        .stream = 0,
+    };
+
+    char *payload = NULL;
+    const int result = inf_complete_sync(mock_state->ctx, &inf_request, &payload);
+    if (result != INF_OK || payload == NULL) {
+        if (mock_state->logger != NULL) {
+            hive_logger_logf(mock_state->logger,
+                                 HIVE_LOG_ERROR,
+                                 "inference",
+                                 "mock_generate_failed",
+                                 "%s",
+                                 inf_last_error(mock_state->ctx));
+        }
+        return map_inf_result(result);
     }
 
     response->text = payload;
@@ -68,7 +107,13 @@ static hive_status_t mock_generate(void *state,
 
 static void mock_destroy(void *state)
 {
-    free(state);
+    hive_mock_inference_state_t *mock_state = state;
+    if (mock_state == NULL) {
+        return;
+    }
+
+    inf_destroy(mock_state->ctx);
+    free(mock_state);
 }
 
 static const hive_inference_adapter_vtable_t mock_vtable = {
@@ -78,6 +123,14 @@ static const hive_inference_adapter_vtable_t mock_vtable = {
 
 hive_status_t hive_inference_adapter_init_mock(hive_inference_adapter_t *adapter,
                                                        struct hive_logger *logger)
+{
+    return hive_inference_adapter_init_named(adapter, "mock", NULL, logger);
+}
+
+hive_status_t hive_inference_adapter_init_named(hive_inference_adapter_t *adapter,
+                                                        const char *backend_name,
+                                                        const char *config_json,
+                                                        struct hive_logger *logger)
 {
     if (adapter == NULL) {
         return HIVE_STATUS_INVALID_ARGUMENT;
@@ -89,9 +142,15 @@ hive_status_t hive_inference_adapter_init_mock(hive_inference_adapter_t *adapter
     }
 
     state->logger = logger;
+    state->ctx = inf_create(backend_name, config_json);
+    if (state->ctx == NULL) {
+        free(state);
+        return HIVE_STATUS_UNAVAILABLE;
+    }
+
     adapter->vtable = &mock_vtable;
     adapter->state = state;
-    adapter->is_mock = true;
+    adapter->is_mock = backend_name == NULL || strcmp(backend_name, "mock") == 0;
     return HIVE_STATUS_OK;
 }
 

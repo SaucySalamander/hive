@@ -72,9 +72,13 @@ In the TUI, every tool request is approved interactively before execution.
 
 ## Custom inference engine
 
-Replace the mock adapter by implementing `hive_inference_adapter_vtable_t` and initializing a custom adapter with `hive_inference_adapter_init_custom()`.
+Hive now routes completions through a small backend registry. The built-in mock backend is selected by default, and you can switch backends by setting `HIVE_INFERENCE_BACKEND` and `HIVE_INFERENCE_CONFIG` before launch.
 
-At a minimum, your engine must implement a `generate` callback that returns an allocated UTF-8 string for each request.
+The low-level public API lives in `src/inference/inference.h` and exposes `inf_create()`, `inf_complete_sync()`, `inf_complete_stream()`, `inf_list_models()`, and `inf_cancel()`.
+
+If you want to keep using the legacy adapter wrapper, initialize a named backend with `hive_inference_adapter_init_named()` or fall back to the compatibility mock via `hive_inference_adapter_init_mock()`.
+
+At a minimum, a backend must return an allocated UTF-8 string for each request and free it through the caller-owned `inf_free()` contract.
 
 ```c
 static hive_status_t my_generate(void *state,

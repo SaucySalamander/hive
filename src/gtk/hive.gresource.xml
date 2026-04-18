@@ -7,6 +7,7 @@
       so the filename is resolved from there.
     -->
     <file>hive-theme.css</file>
+    <file>agent_stats.svg</file>
 
     <!--
       CothamSans.otf lives in assets/fonts/.

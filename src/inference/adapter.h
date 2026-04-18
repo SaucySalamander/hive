@@ -81,6 +81,20 @@ hive_status_t hive_inference_adapter_init_custom(hive_inference_adapter_t *adapt
 void hive_inference_adapter_deinit(hive_inference_adapter_t *adapter);
 
 /**
+ * Initialize an adapter bound to a named backend.
+ *
+ * @param adapter Adapter state to initialize.
+ * @param backend_name Backend registered with the inference core.
+ * @param config_json Backend configuration blob.
+ * @param logger Optional logger used by the wrapper.
+ * @return HIVE_STATUS_OK on success.
+ */
+hive_status_t hive_inference_adapter_init_named(hive_inference_adapter_t *adapter,
+                                                        const char *backend_name,
+                                                        const char *config_json,
+                                                        struct hive_logger *logger);
+
+/**
  * Generate text through the adapter.
  *
  * @param adapter Adapter state.

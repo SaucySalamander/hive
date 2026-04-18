@@ -5,20 +5,23 @@ The authoritative source for actual values is `src/gtk/hive-theme.css`.
 
 ## Colour palette
 
-| Token                  | Light value | Dark value  | Use |
-|------------------------|-------------|-------------|-----|
-| `hive_primary`         | `#F5A623`   | `#F5A623`   | Accent, CTA buttons, selection |
-| `hive_primary_hover`   | `#E09510`   | `#E09510`   | Button hover |
-| `hive_primary_alpha`   | 15 % amber  | 15 % amber  | Row selection background |
-| `hive_surface0`        | `#FFFFFF`   | `#1C1C1E`   | Window background |
-| `hive_surface1`        | `#F2F2F7`   | `#2C2C2E`   | Headerbar, sidebar, statusbar |
-| `hive_surface2`        | `#E5E5EA`   | `#3A3A3C`   | Hover state, dividers |
-| `hive_border`          | `#C7C7CC`   | `#48484A`   | All 1 px borders |
-| `hive_text`            | `#1C1C1E`   | `#F2F2F7`   | Primary text |
-| `hive_text_secondary`  | `#6C6C70`   | `#AEAEB2`   | Labels, metadata |
-| `hive_success`         | `#34C759`   | `#34C759`   | OK / success indicators |
-| `hive_error`           | `#FF3B30`   | `#FF3B30`   | Error / destructive actions |
-| `hive_warning`         | `#FF9500`   | `#FF9500`   | Warnings |
+| Token                   | Light value | Dark value  | Use |
+|-------------------------|-------------|-------------|-----|
+| `hive_primary`          | `#E8960D`   | `#E8960D`   | Accent, CTA buttons, selection |
+| `hive_primary_hover`    | `#C97F00`   | `#C97F00`   | Button hover |
+| `hive_primary_alpha`    | 14 % amber  | 14 % amber  | Row selection background |
+| `hive_headerbar_bg`     | `#222226`   | `#111114`   | Headerbar (dark in both modes) |
+| `hive_headerbar_fg`     | `#EBEBED`   | `#EBEBED`   | Headerbar text & icons |
+| `hive_headerbar_border` | `#3A3A3F`   | `#2E2E33`   | Headerbar bottom border |
+| `hive_surface0`         | `#F8F8FA`   | `#18181B`   | Window / content background |
+| `hive_surface1`         | `#ECECF1`   | `#222226`   | Sidebar, inspector, statusbar |
+| `hive_surface2`         | `#DCDCE2`   | `#2E2E33`   | Hover state, dividers |
+| `hive_border`           | `#B4B4BC`   | `#38383D`   | All 1 px borders |
+| `hive_text`             | `#18181B`   | `#F0F0F2`   | Primary text |
+| `hive_text_secondary`   | `#5A5A62`   | `#9A9AA4`   | Labels, metadata |
+| `hive_success`          | `#2DB550`   | `#2DB550`   | OK / success indicators |
+| `hive_error`            | `#D93025`   | `#D93025`   | Error / destructive actions |
+| `hive_warning`          | `#E07B00`   | `#E07B00`   | Warnings |
 
 ## Spacing scale
 

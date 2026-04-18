@@ -24,6 +24,22 @@ static const char *default_api_bind_address(void)
     return "127.0.0.1";
 }
 
+static const char *selected_inference_backend(const hive_runtime_options_t *options)
+{
+    const char *backend = getenv("HIVE_INFERENCE_BACKEND");
+    if (backend != NULL && backend[0] != '\0') {
+        return backend;
+    }
+
+    return options != NULL && options->use_mock_inference ? "mock" : NULL;
+}
+
+static const char *selected_inference_config(void)
+{
+    const char *config = getenv("HIVE_INFERENCE_CONFIG");
+    return (config != NULL && config[0] != '\0') ? config : NULL;
+}
+
 static const char *default_project_rules(void)
 {
     return
@@ -138,7 +154,21 @@ hive_status_t hive_runtime_init(hive_runtime_t *runtime,
         return status;
     }
 
-    status = hive_inference_adapter_init_mock(&runtime->adapter, &runtime->logger);
+    const char *backend_name = selected_inference_backend(&runtime->options);
+    if (backend_name == NULL) {
+        hive_logger_logf(&runtime->logger,
+                             HIVE_LOG_ERROR,
+                             "runtime",
+                             "init",
+                             "no inference backend configured; set HIVE_INFERENCE_BACKEND or enable mock inference");
+        hive_logger_deinit(&runtime->logger);
+        return HIVE_STATUS_UNAVAILABLE;
+    }
+
+    status = hive_inference_adapter_init_named(&runtime->adapter,
+                                                   backend_name,
+                                                   selected_inference_config(),
+                                                   &runtime->logger);
     if (status != HIVE_STATUS_OK) {
         hive_logger_deinit(&runtime->logger);
         return status;
