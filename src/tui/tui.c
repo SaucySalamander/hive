@@ -1,7 +1,7 @@
 #include "tui/tui.h"
 
 #include "core/runtime.h"
-#include "logging/logger.h"
+#include "common/logging/logger.h"
 
 #if HIVE_HAVE_NCURSES
 #if __has_include(<ncurses.h>)

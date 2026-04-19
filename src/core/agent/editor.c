@@ -1,6 +1,6 @@
-#include "core/editor.h"
+#include "core/agent/editor.h"
 
-#include "core/agent.h"
+#include "core/agent/agent.h"
 #include "core/runtime.h"
 
 static hive_status_t editor_agent_run(const hive_agent_t *agent,

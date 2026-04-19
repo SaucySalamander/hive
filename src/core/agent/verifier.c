@@ -1,6 +1,6 @@
-#include "core/verifier.h"
+#include "core/agent/verifier.h"
 
-#include "core/agent.h"
+#include "core/agent/agent.h"
 #include "core/runtime.h"
 
 static hive_status_t verifier_agent_run(const hive_agent_t *agent,

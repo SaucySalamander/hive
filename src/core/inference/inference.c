@@ -1,4 +1,4 @@
-#include "inference/inference.h"
+#include "core/inference/inference.h"
 
 #include "common/strings.h"
 
@@ -398,7 +398,7 @@ static int mock_list_models(void *handle, char ***models_out, size_t *count_out)
         free(models[0]);
         free(models[1]);
         free(models);
-        mock_set_error(state, "mock backend could not duplicate model names");
+        mock_set_error(state, "mock backend could not allocate model names");
         return INF_ERR_BACKEND;
     }
 
@@ -407,24 +407,20 @@ static int mock_list_models(void *handle, char ***models_out, size_t *count_out)
     return INF_OK;
 }
 
-static int mock_cancel(void *handle, int cancel_token)
+static int mock_cancel(void *handle, int token)
 {
     inf_mock_state_t *state = handle;
-    if (state == NULL || cancel_token <= 0) {
+    if (state == NULL) {
         return INF_ERR;
     }
 
     pthread_mutex_lock(&state->lock);
-    inf_stream_entry_t *entry = stream_find_locked(state->streams, cancel_token);
+    inf_stream_entry_t *entry = stream_find_locked(state->streams, token);
     if (entry != NULL) {
         atomic_store(&entry->cancelled, true);
-        pthread_mutex_unlock(&state->lock);
-        return INF_OK;
     }
     pthread_mutex_unlock(&state->lock);
-
-    mock_set_error(state, "mock backend could not find a matching stream token");
-    return INF_ERR_BACKEND;
+    return INF_OK;
 }
 
 static const char *mock_last_error(void *handle)
@@ -434,10 +430,11 @@ static const char *mock_last_error(void *handle)
         return "";
     }
 
+    const char *out = "";
     pthread_mutex_lock(&state->lock);
-    const char *message = state->last_error != NULL ? state->last_error : "";
+    out = safe_text(state->last_error);
     pthread_mutex_unlock(&state->lock);
-    return message;
+    return out;
 }
 
 static const inf_adapter_vtable_t mock_vtable = {
@@ -453,16 +450,12 @@ static const inf_adapter_vtable_t mock_vtable = {
 
 int inf_register_adapter(const void *adapter_vtable)
 {
-    registry_ensure_ready();
-
     if (adapter_vtable == NULL) {
         return INF_ERR;
     }
 
-    const inf_adapter_vtable_t *vtable = adapter_vtable;
-
     pthread_mutex_lock(&g_registry_lock);
-    const int status = registry_add_locked(vtable);
+    const int status = registry_add_locked((const inf_adapter_vtable_t *)adapter_vtable);
     pthread_mutex_unlock(&g_registry_lock);
     return status;
 }
@@ -473,32 +466,40 @@ inf_ctx_t *inf_create(const char *backend_name, const char *config_json)
 
     pthread_mutex_lock(&g_registry_lock);
     const inf_adapter_vtable_t *vtable = registry_find_locked(backend_name);
-    pthread_mutex_unlock(&g_registry_lock);
-
     if (vtable == NULL) {
+        pthread_mutex_unlock(&g_registry_lock);
         return NULL;
     }
 
     inf_ctx_t *ctx = calloc(1U, sizeof(*ctx));
     if (ctx == NULL) {
-        return NULL;
-    }
-
-    if (pthread_mutex_init(&ctx->lock, NULL) != 0) {
-        free(ctx);
+        pthread_mutex_unlock(&g_registry_lock);
         return NULL;
     }
 
     ctx->vtable = vtable;
-    ctx->next_cancel_token = 1;
+    pthread_mutex_unlock(&g_registry_lock);
 
-    const int init_status = vtable->init(config_json, &ctx->handle);
-    if (init_status != INF_OK || ctx->handle == NULL) {
-        pthread_mutex_destroy(&ctx->lock);
+    if (vtable->init != NULL) {
+        void *handle = NULL;
+        if (vtable->init(config_json, &handle) != INF_OK) {
+            free(ctx);
+            return NULL;
+        }
+        ctx->handle = handle;
+    }
+
+    if (pthread_mutex_init(&ctx->lock, NULL) != 0) {
+        if (ctx->vtable->shutdown != NULL && ctx->handle != NULL) {
+            ctx->vtable->shutdown(ctx->handle);
+        }
         free(ctx);
         return NULL;
     }
 
+    ctx->last_error = NULL;
+    ctx->fallback_streams = NULL;
+    ctx->next_cancel_token = 1;
     return ctx;
 }
 
@@ -508,7 +509,7 @@ void inf_destroy(inf_ctx_t *ctx)
         return;
     }
 
-    if (ctx->vtable != NULL && ctx->vtable->shutdown != NULL) {
+    if (ctx->vtable != NULL && ctx->vtable->shutdown != NULL && ctx->handle != NULL) {
         ctx->vtable->shutdown(ctx->handle);
     }
 
@@ -523,61 +524,41 @@ void inf_destroy(inf_ctx_t *ctx)
         cursor = next;
     }
 
-    pthread_mutex_destroy(&ctx->lock);
     free(ctx->last_error);
+    pthread_mutex_destroy(&ctx->lock);
     free(ctx);
 }
 
 int inf_list_models(inf_ctx_t *ctx, char ***models_out, size_t *count_out)
 {
-    if (ctx == NULL || models_out == NULL || count_out == NULL) {
+    if (ctx == NULL || ctx->vtable == NULL || ctx->vtable->list_models == NULL) {
         return INF_ERR;
     }
 
-    const int status = ctx->vtable->list_models(ctx->handle, models_out, count_out);
-    if (status != INF_OK) {
-        ctx_set_error(ctx, "backend did not return a model list");
-    }
-
-    return status;
+    return ctx->vtable->list_models(ctx->handle, models_out, count_out);
 }
 
 void inf_free_model_list(char **models, size_t count)
 {
-    if (models == NULL) {
-        return;
-    }
-
-    for (size_t index = 0U; index < count; ++index) {
-        free(models[index]);
-    }
+    if (models == NULL) return;
+    for (size_t i = 0; i < count; ++i) free(models[i]);
     free(models);
 }
 
 int inf_complete_sync(inf_ctx_t *ctx, const inf_request_t *req, char **out_text)
 {
-    if (ctx == NULL || req == NULL || out_text == NULL) {
+    if (ctx == NULL || ctx->vtable == NULL || ctx->vtable->complete_sync == NULL) {
         return INF_ERR;
     }
 
-    *out_text = NULL;
-    const int status = ctx->vtable->complete_sync(ctx->handle, req, out_text);
-    if (status != INF_OK || *out_text == NULL) {
-        if (status == INF_OK) {
-            ctx_set_error(ctx, "backend returned no completion text");
-            return INF_ERR_BACKEND;
-        }
-
-        if (status == INF_ERR_CANCELLED) {
-            ctx_set_error(ctx, "completion cancelled");
-        } else if (status == INF_ERR_TIMEOUT) {
-            ctx_set_error(ctx, "completion timed out");
-        } else {
-            ctx_set_error(ctx, "completion failed");
+    ctx_set_error(ctx, NULL);
+    const int res = ctx->vtable->complete_sync(ctx->handle, req, out_text);
+    if (res != INF_OK) {
+        if (ctx->vtable->last_error != NULL) {
+            ctx_set_error(ctx, ctx->vtable->last_error(ctx->handle));
         }
     }
-
-    return status;
+    return res;
 }
 
 int inf_complete_stream(inf_ctx_t *ctx,
@@ -586,90 +567,27 @@ int inf_complete_stream(inf_ctx_t *ctx,
                         void *user,
                         int *cancel_token_out)
 {
-    if (ctx == NULL || req == NULL || cb == NULL) {
+    if (ctx == NULL || ctx->vtable == NULL || ctx->vtable->complete_stream == NULL) {
         return INF_ERR;
     }
 
-    if (ctx->vtable->complete_stream != NULL && ctx->vtable->cancel != NULL) {
-        const int status = ctx->vtable->complete_stream(ctx->handle, req, cb, user, cancel_token_out);
-        if (status != INF_OK) {
-            if (status == INF_ERR_CANCELLED) {
-                ctx_set_error(ctx, "stream cancelled");
-            } else if (status == INF_ERR_TIMEOUT) {
-                ctx_set_error(ctx, "stream timed out");
-            } else {
-                ctx_set_error(ctx, "stream failed");
-            }
+    ctx_set_error(ctx, NULL);
+    const int res = ctx->vtable->complete_stream(ctx->handle, req, cb, user, cancel_token_out);
+    if (res != INF_OK) {
+        if (ctx->vtable->last_error != NULL) {
+            ctx_set_error(ctx, ctx->vtable->last_error(ctx->handle));
         }
-
-        return status;
     }
-
-    pthread_mutex_lock(&ctx->lock);
-    inf_stream_entry_t *entry = stream_add_locked(&ctx->fallback_streams, &ctx->next_cancel_token, cancel_token_out);
-    pthread_mutex_unlock(&ctx->lock);
-    if (entry == NULL) {
-        ctx_set_error(ctx, "could not create fallback stream token");
-        return INF_ERR_BACKEND;
-    }
-
-    char *text = NULL;
-    int status = inf_complete_sync(ctx, req, &text);
-    if (status != INF_OK) {
-        pthread_mutex_lock(&ctx->lock);
-        stream_remove_locked(&ctx->fallback_streams, entry->token);
-        pthread_mutex_unlock(&ctx->lock);
-        return status;
-    }
-
-    const size_t text_length = strlen(text);
-    const size_t chunk_size = 48U;
-    for (size_t offset = 0U; offset < text_length; offset += chunk_size) {
-        if (atomic_load(&entry->cancelled)) {
-            free(text);
-            pthread_mutex_lock(&ctx->lock);
-            stream_remove_locked(&ctx->fallback_streams, entry->token);
-            pthread_mutex_unlock(&ctx->lock);
-            ctx_set_error(ctx, "stream cancelled");
-            return INF_ERR_CANCELLED;
-        }
-
-        const size_t remaining = text_length - offset;
-        const size_t len = remaining < chunk_size ? remaining : chunk_size;
-        cb(text + offset, len, user);
-    }
-
-    free(text);
-    pthread_mutex_lock(&ctx->lock);
-    stream_remove_locked(&ctx->fallback_streams, entry->token);
-    pthread_mutex_unlock(&ctx->lock);
-    return INF_OK;
+    return res;
 }
 
 int inf_cancel(inf_ctx_t *ctx, int cancel_token)
 {
-    if (ctx == NULL || cancel_token <= 0) {
+    if (ctx == NULL || ctx->vtable == NULL || ctx->vtable->cancel == NULL) {
         return INF_ERR;
     }
 
-    if (ctx->vtable->cancel != NULL) {
-        const int status = ctx->vtable->cancel(ctx->handle, cancel_token);
-        if (status == INF_OK) {
-            return INF_OK;
-        }
-    }
-
-    pthread_mutex_lock(&ctx->lock);
-    inf_stream_entry_t *entry = stream_find_locked(ctx->fallback_streams, cancel_token);
-    if (entry != NULL) {
-        atomic_store(&entry->cancelled, true);
-        pthread_mutex_unlock(&ctx->lock);
-        return INF_OK;
-    }
-    pthread_mutex_unlock(&ctx->lock);
-
-    ctx_set_error(ctx, "cancel token was not found");
-    return INF_ERR_BACKEND;
+    return ctx->vtable->cancel(ctx->handle, cancel_token);
 }
 
 void inf_free(char *ptr)
@@ -679,19 +597,10 @@ void inf_free(char *ptr)
 
 const char *inf_last_error(inf_ctx_t *ctx)
 {
-    if (ctx == NULL) {
-        return "invalid context";
-    }
-
-    if (ctx->vtable != NULL && ctx->vtable->last_error != NULL) {
-        const char *backend_error = ctx->vtable->last_error(ctx->handle);
-        if (backend_error != NULL && backend_error[0] != '\0') {
-            return backend_error;
-        }
-    }
-
+    if (ctx == NULL) return "";
+    const char *out = "";
     pthread_mutex_lock(&ctx->lock);
-    const char *error = ctx->last_error != NULL ? ctx->last_error : "";
+    out = safe_text(ctx->last_error);
     pthread_mutex_unlock(&ctx->lock);
-    return error;
+    return out;
 }

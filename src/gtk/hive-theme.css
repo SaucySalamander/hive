@@ -91,8 +91,8 @@ headerbar .title {
 
 /* Icon buttons in the headerbar (search, theme toggle, window controls) */
 headerbar button:not(.suggested-action):not(.destructive-action) {
-    background-color: alpha(white, 0.07);
-    border: 1px solid alpha(white, 0.13);
+    background-color: alpha(@hive_headerbar_fg, 0.07);
+    border: 1px solid alpha(@hive_headerbar_fg, 0.13);
     color: @hive_headerbar_fg;
     border-radius: 6px;
     padding: 5px 8px;
@@ -100,8 +100,8 @@ headerbar button:not(.suggested-action):not(.destructive-action) {
 }
 
 headerbar button:not(.suggested-action):not(.destructive-action):hover {
-    background-color: alpha(white, 0.14);
-    border-color: alpha(white, 0.22);
+    background-color: alpha(@hive_headerbar_fg, 0.14);
+    border-color: alpha(@hive_headerbar_fg, 0.22);
 }
 
 headerbar button:not(.suggested-action):not(.destructive-action):active,
@@ -113,13 +113,13 @@ headerbar button:not(.suggested-action):not(.destructive-action):checked {
 
 /* Window close/min/max buttons */
 headerbar windowcontrols button {
-    background-color: alpha(white, 0.10);
-    border: 1px solid alpha(white, 0.18);
+    background-color: alpha(@hive_headerbar_fg, 0.10);
+    border: 1px solid alpha(@hive_headerbar_fg, 0.18);
     color: @hive_headerbar_fg;
 }
 
 headerbar windowcontrols button:hover {
-    background-color: alpha(white, 0.20);
+    background-color: alpha(@hive_headerbar_fg, 0.20);
 }
 
 /* ----------------------------------------------------------------
@@ -163,12 +163,16 @@ headerbar windowcontrols button:hover {
 
 .hive-nav-badge {
     background-color: @hive_primary;
-    color: white;
+    color: @hive_text;
     border-radius: 99px;
     padding: 1px 7px;
     font-size: 11px;
     font-weight: 700;
     min-width: 18px;
+}
+
+window.hive-dark .hive-nav-badge {
+    color: #18181B;
 }
 
 /* ----------------------------------------------------------------
@@ -194,7 +198,7 @@ headerbar windowcontrols button:hover {
 
 .hive-bottom-nav button.nav-active {
     background-color: @hive_primary;
-    color: white;
+    color: @hive_text;
     font-weight: 600;
 }
 
@@ -280,6 +284,20 @@ headerbar windowcontrols button:hover {
     border: 1px solid alpha(@hive_border, 0.6);
     border-radius: 16px;
     padding: 14px;
+}
+
+.hive-intake-prompt-scroll,
+.hive-intake-prompt-scroll > viewport,
+.hive-intake-prompt-scroll > undershoot,
+.hive-intake-prompt-scroll > overshoot,
+.hive-intake-prompt-view {
+    background-color: @hive_surface1;
+    color: @hive_text;
+}
+
+.hive-intake-prompt-view {
+    border: 1px solid alpha(@hive_border, 0.75);
+    border-radius: 8px;
 }
 
 .hive-intake-section-title {
@@ -409,6 +427,124 @@ window.hive-dark .hive-knowledge-value {
 }
 
 /* ----------------------------------------------------------------
+ * Lifecycle templates page
+ * ---------------------------------------------------------------- */
+.hive-templates-page {
+    background-color: @hive_surface0;
+}
+
+.hive-templates-hero {
+    background: linear-gradient(180deg, alpha(@hive_primary, 0.12), alpha(@hive_primary, 0.04));
+    border: 1px solid alpha(@hive_border, 0.55);
+    border-radius: 16px;
+    padding: 16px 18px;
+}
+
+.hive-templates-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: @hive_text;
+}
+
+.hive-templates-subtitle {
+    font-size: 13px;
+    color: @hive_text_secondary;
+}
+
+.hive-templates-list-scroll > viewport,
+.hive-templates-list-scroll > undershoot,
+.hive-templates-list-scroll > overshoot {
+    background-color: transparent;
+}
+
+.hive-templates-list {
+    background-color: @hive_surface1;
+    border: 1px solid alpha(@hive_border, 0.55);
+    border-radius: 12px;
+}
+
+.hive-templates-list row {
+    padding: 6px 8px;
+    border-radius: 8px;
+    margin: 2px 4px;
+}
+
+.hive-templates-list row:selected {
+    background-color: @hive_primary_alpha;
+    color: @hive_primary;
+}
+
+.hive-templates-detail-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: @hive_text;
+}
+
+.hive-templates-detail-desc {
+    font-size: 13px;
+    color: @hive_text_secondary;
+    margin-bottom: 4px;
+}
+
+.hive-templates-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: @hive_text_secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+}
+
+.hive-templates-stages-grid {
+    background-color: transparent;
+}
+
+.hive-template-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: @hive_text_secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 4px;
+}
+
+.hive-template-stage-age {
+    font-size: 12px;
+    color: @hive_text_secondary;
+    font-variant-numeric: tabular-nums;
+}
+
+.hive-template-stage-firmness {
+    font-size: 12px;
+    color: @hive_text;
+}
+
+.hive-templates-spawn-row {
+    border-top: 1px solid alpha(@hive_border, 0.55);
+    padding-top: 10px;
+    margin-top: 4px;
+}
+
+/* Dark-mode overrides */
+window.hive-dark .hive-templates-page { background-color: #18181B; }
+window.hive-dark .hive-templates-hero {
+    background: linear-gradient(180deg, alpha(#E8960D, 0.16), alpha(#E8960D, 0.06));
+    border-color: #38383D;
+}
+window.hive-dark .hive-templates-title { color: #F0F0F2; }
+window.hive-dark .hive-templates-subtitle,
+window.hive-dark .hive-templates-section-title,
+window.hive-dark .hive-template-header,
+window.hive-dark .hive-template-stage-age { color: #9A9AA4; }
+window.hive-dark .hive-templates-list {
+    background-color: #222226;
+    border-color: #38383D;
+}
+window.hive-dark .hive-templates-detail-name,
+window.hive-dark .hive-template-stage-firmness { color: #F0F0F2; }
+window.hive-dark .hive-templates-spawn-row { border-color: #38383D; }
+
+/* ----------------------------------------------------------------
  * Inspector pane
  * ---------------------------------------------------------------- */
 .hive-inspector {
@@ -453,19 +589,109 @@ searchentry {
 }
 
 /* ----------------------------------------------------------------
+ * Shared form controls and list surfaces
+ * ---------------------------------------------------------------- */
+scrolledwindow > viewport,
+scrolledwindow > undershoot,
+scrolledwindow > overshoot {
+    background-color: @hive_surface0;
+}
+
+list,
+listbox {
+    background-color: @hive_surface1;
+    color: @hive_text;
+}
+
+list row,
+listbox row {
+    background-color: @hive_surface1;
+    color: @hive_text;
+    transition: background-color 80ms ease;
+}
+
+list row:hover,
+listbox row:hover {
+    background-color: @hive_surface2;
+}
+
+list row:selected,
+listbox row:selected {
+    background-color: @hive_primary_alpha;
+    color: @hive_text;
+}
+
+entry,
+searchentry,
+textview,
+spinbutton {
+    background-color: @hive_surface1;
+    color: @hive_text;
+    border: 1px solid alpha(@hive_border, 0.75);
+    border-radius: 8px;
+}
+
+entry:focus,
+searchentry:focus,
+textview:focus,
+spinbutton:focus {
+    border-color: alpha(@hive_primary, 0.65);
+}
+
+entry placeholder,
+searchentry placeholder {
+    color: @hive_text_secondary;
+}
+
+textview text {
+    background-color: @hive_surface1;
+    color: @hive_text;
+}
+
+spinbutton button {
+    background-color: @hive_surface2;
+    color: @hive_text;
+    border: none;
+    border-radius: 0;
+}
+
+spinbutton button:hover {
+    background-color: @hive_primary_alpha;
+}
+
+/* ----------------------------------------------------------------
  * Buttons
  * ---------------------------------------------------------------- */
 button {
+    background-color: @hive_surface1;
+    color: @hive_text;
+    border: 1px solid alpha(@hive_border, 0.75);
     border-radius: 6px;
     padding: 5px 14px;
     font-size: 13px;
-    transition: background-color 100ms ease, box-shadow 100ms ease;
+    transition: background-color 100ms ease, box-shadow 100ms ease, border-color 100ms ease;
+}
+
+button:hover {
+    background-color: @hive_surface2;
+    border-color: alpha(@hive_border, 0.95);
+}
+
+button:active,
+button:checked {
+    background-color: @hive_primary_alpha;
+    border-color: alpha(@hive_primary, 0.60);
+}
+
+button:disabled {
+    background-color: alpha(@hive_surface1, 0.65);
+    color: alpha(@hive_text_secondary, 0.65);
 }
 
 button.suggested-action {
     background-color: @hive_primary;
-    color: white;
-    border: none;
+    color: @hive_text;
+    border-color: alpha(@hive_primary, 0.45);
     font-weight: 600;
 }
 
@@ -475,13 +701,13 @@ button.suggested-action:hover {
 
 button.suggested-action:disabled {
     background-color: alpha(@hive_primary, 0.4);
-    color: alpha(white, 0.6);
+    color: alpha(@hive_text, 0.6);
 }
 
 button.destructive-action {
     background-color: @hive_error;
-    color: white;
-    border: none;
+    color: @hive_text;
+    border-color: alpha(@hive_error, 0.45);
 }
 
 /* ----------------------------------------------------------------
@@ -540,6 +766,11 @@ window.hive-dark .hive-sidebar listbox row:hover {
     background-color: #2E2E33;
 }
 
+window.hive-dark .hive-sidebar list row:selected,
+window.hive-dark .hive-sidebar listbox row:selected {
+    color: #18181B;
+}
+
 window.hive-dark .hive-inspector {
     background-color: #222226;
     border-left-color: #38383D;
@@ -566,6 +797,110 @@ window.hive-dark .hive-statusbar {
 window.hive-dark searchbar {
     background-color: #222226;
     border-bottom-color: #38383D;
+}
+
+window.hive-dark scrolledwindow > viewport,
+window.hive-dark scrolledwindow > undershoot,
+window.hive-dark scrolledwindow > overshoot {
+    background-color: #18181B;
+}
+
+window.hive-dark list,
+window.hive-dark listbox {
+    background-color: #222226;
+    color: #F0F0F2;
+}
+
+window.hive-dark list row,
+window.hive-dark listbox row {
+    background-color: #222226;
+    color: #F0F0F2;
+}
+
+window.hive-dark list row:hover,
+window.hive-dark listbox row:hover {
+    background-color: #2E2E33;
+}
+
+window.hive-dark list row:selected,
+window.hive-dark listbox row:selected {
+    background-color: alpha(#E8960D, 0.20);
+    color: #18181B;
+}
+
+window.hive-dark entry,
+window.hive-dark searchentry,
+window.hive-dark textview,
+window.hive-dark spinbutton {
+    background-color: #222226;
+    color: #F0F0F2;
+    border-color: #38383D;
+}
+
+window.hive-dark textview text {
+    background-color: #222226;
+    color: #F0F0F2;
+}
+
+window.hive-dark spinbutton button {
+    background-color: #2E2E33;
+    color: #F0F0F2;
+}
+
+window.hive-dark spinbutton button:hover {
+    background-color: alpha(#E8960D, 0.20);
+}
+
+window.hive-dark button {
+    background-color: #222226;
+    border-color: #38383D;
+    color: #F0F0F2;
+}
+
+window.hive-dark button:hover {
+    background-color: #2E2E33;
+    border-color: #38383D;
+}
+
+window.hive-dark button:active,
+window.hive-dark button:checked {
+    background-color: alpha(#E8960D, 0.20);
+    border-color: alpha(#E8960D, 0.55);
+    color: #18181B;
+}
+
+window.hive-dark button:disabled {
+    background-color: alpha(#222226, 0.65);
+    color: alpha(#9A9AA4, 0.65);
+}
+
+window.hive-dark button.suggested-action {
+    background-color: #E8960D;
+    color: #18181B;
+    border-color: alpha(#E8960D, 0.45);
+}
+
+window.hive-dark button.suggested-action:hover {
+    background-color: #C97F00;
+}
+
+window.hive-dark button.suggested-action:disabled {
+    background-color: alpha(#E8960D, 0.40);
+    color: alpha(#18181B, 0.60);
+}
+
+window.hive-dark button.destructive-action {
+    background-color: #D93025;
+    color: #18181B;
+    border-color: alpha(#D93025, 0.45);
+}
+
+window.hive-dark .hive-bottom-nav button.nav-active {
+    color: #18181B;
+}
+
+window.hive-dark .hive-role-badge {
+    color: #18181B;
 }
 
 window.hive-dark paned > separator {
@@ -606,6 +941,19 @@ window.hive-dark .hive-intake-status {
 window.hive-dark .hive-intake-metrics > box,
 window.hive-dark .hive-intake-card {
     background-color: #222226;
+    border-color: #38383D;
+}
+
+window.hive-dark .hive-intake-prompt-scroll,
+window.hive-dark .hive-intake-prompt-scroll > viewport,
+window.hive-dark .hive-intake-prompt-scroll > undershoot,
+window.hive-dark .hive-intake-prompt-scroll > overshoot,
+window.hive-dark .hive-intake-prompt-view {
+    background-color: #222226;
+    color: #F0F0F2;
+}
+
+window.hive-dark .hive-intake-prompt-view {
     border-color: #38383D;
 }
 
@@ -674,7 +1022,7 @@ window.hive-dark .hive-stats-label {
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 700;
-    color: white;
+    color: @hive_text;
     min-width: 24px;
 }
 
@@ -684,7 +1032,7 @@ window.hive-dark .hive-stats-label {
 .hive-badge-nurse    { background-color: #C77AC7; }
 .hive-badge-guard    { background-color: #D9544F; }
 .hive-badge-cleaner  { background-color: #9E9E9E; }
-.hive-badge-drone    { background-color: #F2C459; color: #3A3000; }
+.hive-badge-drone    { background-color: #F2C459; color: @hive_text; }
 
 /* ----------------------------------------------------------------
  * Dynamics: Legend strip

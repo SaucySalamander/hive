@@ -1,15 +1,15 @@
 #include "core/state_machine.h"
 
 #include "common/strings.h"
-#include "core/coder.h"
-#include "core/editor.h"
-#include "core/evaluator.h"
-#include "core/orchestrator.h"
-#include "core/planner.h"
+#include "core/agent/coder.h"
+#include "core/agent/editor.h"
+#include "core/evaluator/evaluator.h"
+#include "core/agent/orchestrator.h"
+#include "core/agent/planner.h"
 #include "core/runtime.h"
-#include "core/tester.h"
-#include "core/verifier.h"
-#include "logging/logger.h"
+#include "core/agent/tester.h"
+#include "core/agent/verifier.h"
+#include "common/logging/logger.h"
 
 #include <stdlib.h>
 #include <string.h>

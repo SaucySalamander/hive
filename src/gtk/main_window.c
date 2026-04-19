@@ -3,9 +3,9 @@
 #include "gtk/components/session_row.h"
 #include "gtk/components/inspector_pane.h"
 #include "gtk/components/status_bar.h"
-#include "core/dynamics.h"
+#include "core/dynamics/dynamics.h"
 #include "core/runtime.h"
-#include "logging/logger.h"
+#include "common/logging/logger.h"
 
 #include <gtk/gtk.h>
 #include <pango/pangocairo.h>
@@ -693,10 +693,13 @@ static gboolean intake_spawn_worker(hive_agent_role_t role)
 
     hive_agent_cell_t *cell = &g_dynamics.agents[g_dynamics.agent_count];
     memset(cell, 0, sizeof(*cell));
-    cell->role = role;
-    cell->age_ticks = 0U;
-    cell->perf_score = 50U;
+    cell->role         = role;
+    cell->age_ticks    = 0U;
+    cell->perf_score   = 50U;
     cell->signal_count = 1U;
+    /* Attach the built-in worker lifecycle template so the agent ages
+     * through cleaner → nurse → builder → guard → forager. */
+    cell->lifecycle_id = hive_lifecycle_builtin_worker();
     g_dynamics.agent_count++;
 
     g_dynamics.stats.worker_spawns++;
@@ -1267,10 +1270,12 @@ static GtkWidget *build_intake_page(void)
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(prompt_scroll),
                                    GTK_POLICY_NEVER,
                                    GTK_POLICY_AUTOMATIC);
+    gtk_widget_add_css_class(prompt_scroll, "hive-intake-prompt-scroll");
     gtk_widget_set_vexpand(prompt_scroll, FALSE);
     gtk_widget_set_hexpand(prompt_scroll, TRUE);
 
     state->prompt_view = gtk_text_view_new();
+    gtk_widget_add_css_class(state->prompt_view, "hive-intake-prompt-view");
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(state->prompt_view), GTK_WRAP_WORD_CHAR);
     gtk_widget_set_size_request(state->prompt_view, -1, 110);
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(prompt_scroll),
@@ -1607,6 +1612,330 @@ static GtkWidget *build_knowledge_page(hive_runtime_t *runtime)
     return page;
 }
 
+/* ================================================================
+ * Templates page — lifecycle template browser & spawn
+ * ================================================================ */
+
+typedef struct {
+    GtkWidget          *list;          /* GtkListBox — template entries */
+    GtkWidget          *detail_name;   /* GtkLabel — selected template name */
+    GtkWidget          *detail_desc;   /* GtkLabel — selected template description */
+    GtkWidget          *stages_grid;   /* GtkGrid  — stage rows */
+    GtkWidget          *spawn_btn;     /* GtkButton */
+    GtkWidget          *spawn_spin;    /* GtkSpinButton — agent count */
+    hive_lifecycle_id_t selected_id;
+} hive_templates_state_t;
+
+static void templates_state_free(gpointer data) { g_free(data); }
+
+/* Role → CSS class (reuse existing badge classes) */
+static const char *tmpl_role_css(hive_agent_role_t role)
+{
+    switch (role) {
+    case HIVE_ROLE_QUEEN:   return "hive-badge-queen";
+    case HIVE_ROLE_FORAGER: return "hive-badge-forager";
+    case HIVE_ROLE_BUILDER: return "hive-badge-builder";
+    case HIVE_ROLE_NURSE:   return "hive-badge-nurse";
+    case HIVE_ROLE_GUARD:   return "hive-badge-guard";
+    case HIVE_ROLE_CLEANER: return "hive-badge-cleaner";
+    case HIVE_ROLE_DRONE:   return "hive-badge-drone";
+    default:                return NULL;
+    }
+}
+
+static void templates_refresh_stages(hive_templates_state_t *state,
+                                     const hive_lifecycle_template_t *tmpl)
+{
+    GtkWidget *grid = state->stages_grid;
+
+    /* Remove all existing children */
+    GtkWidget *child = gtk_widget_get_first_child(grid);
+    while (child != NULL) {
+        GtkWidget *next = gtk_widget_get_next_sibling(child);
+        gtk_grid_remove(GTK_GRID(grid), child);
+        child = next;
+    }
+
+    if (tmpl == NULL || tmpl->stage_count == 0) return;
+
+    /* Header row */
+    const char *hdrs[] = { "Age window", "Role", "Firmness" };
+    for (int c = 0; c < 3; ++c) {
+        GtkWidget *lbl = gtk_label_new(hdrs[c]);
+        gtk_widget_add_css_class(lbl, "hive-template-header");
+        gtk_label_set_xalign(GTK_LABEL(lbl), 0.0);
+        gtk_grid_attach(GTK_GRID(grid), lbl, c, 0, 1, 1);
+    }
+
+    for (size_t i = 0; i < tmpl->stage_count; ++i) {
+        const hive_lifecycle_stage_t *s = &tmpl->stages[i];
+        int row = (int)i + 1;
+
+        /* Age window */
+        char age_buf[32];
+        if (i + 1 < tmpl->stage_count)
+            snprintf(age_buf, sizeof(age_buf), "ticks %u – %u",
+                     s->start_tick, tmpl->stages[i + 1].start_tick - 1);
+        else
+            snprintf(age_buf, sizeof(age_buf), "tick %u +", s->start_tick);
+        GtkWidget *age_lbl = gtk_label_new(age_buf);
+        gtk_label_set_xalign(GTK_LABEL(age_lbl), 0.0);
+        gtk_widget_add_css_class(age_lbl, "hive-template-stage-age");
+        gtk_widget_set_margin_end(age_lbl, 8);
+        gtk_grid_attach(GTK_GRID(grid), age_lbl, 0, row, 1, 1);
+
+        /* Role badge */
+        char badge_buf[32];
+        snprintf(badge_buf, sizeof(badge_buf), "%c  %s",
+                 hive_role_to_badge(s->role), hive_role_to_string(s->role));
+        GtkWidget *role_lbl = gtk_label_new(badge_buf);
+        gtk_label_set_xalign(GTK_LABEL(role_lbl), 0.0);
+        gtk_widget_add_css_class(role_lbl, "hive-role-badge");
+        const char *rc = tmpl_role_css(s->role);
+        if (rc != NULL) gtk_widget_add_css_class(role_lbl, rc);
+        gtk_widget_set_margin_end(role_lbl, 8);
+        gtk_grid_attach(GTK_GRID(grid), role_lbl, 1, row, 1, 1);
+
+        /* Firmness label */
+        char firm_buf[32];
+        if (s->firmness >= 100)
+            snprintf(firm_buf, sizeof(firm_buf), "Forced");
+        else
+            snprintf(firm_buf, sizeof(firm_buf), "%u%% chance/tick", s->firmness);
+        GtkWidget *firm_lbl = gtk_label_new(firm_buf);
+        gtk_label_set_xalign(GTK_LABEL(firm_lbl), 0.0);
+        gtk_widget_add_css_class(firm_lbl, "hive-template-stage-firmness");
+        gtk_grid_attach(GTK_GRID(grid), firm_lbl, 2, row, 1, 1);
+    }
+}
+
+static void on_template_row_selected(GtkListBox *list,
+                                     GtkListBoxRow *row,
+                                     gpointer user_data)
+{
+    (void)list;
+    hive_templates_state_t *state = user_data;
+    if (row == NULL) {
+        state->selected_id = HIVE_LIFECYCLE_NONE;
+        gtk_widget_set_sensitive(state->spawn_btn, FALSE);
+        return;
+    }
+
+    hive_lifecycle_id_t id =
+        (hive_lifecycle_id_t)(gintptr)g_object_get_data(G_OBJECT(row), "lifecycle-id");
+    state->selected_id = id;
+
+    const hive_lifecycle_template_t *tmpl = hive_lifecycle_get(id);
+    if (tmpl == NULL) return;
+
+    gtk_label_set_text(GTK_LABEL(state->detail_name), tmpl->name);
+    gtk_label_set_text(GTK_LABEL(state->detail_desc), tmpl->description);
+    gtk_widget_set_sensitive(state->spawn_btn, TRUE);
+
+    templates_refresh_stages(state, tmpl);
+}
+
+static void on_template_spawn_clicked(GtkButton *btn, gpointer user_data)
+{
+    (void)btn;
+    hive_templates_state_t *state = user_data;
+    if (state->selected_id == HIVE_LIFECYCLE_NONE) return;
+
+    if (!g_dynamics_inited) {
+        hive_dynamics_init(&g_dynamics, 1);
+        g_dynamics_inited = TRUE;
+    }
+
+    const hive_lifecycle_template_t *tmpl = hive_lifecycle_get(state->selected_id);
+    if (tmpl == NULL) return;
+
+    int count = (int)gtk_spin_button_get_value(GTK_SPIN_BUTTON(state->spawn_spin));
+    int spawned = 0;
+    for (int i = 0; i < count; ++i) {
+        if (g_dynamics.agent_count >= HIVE_DYNAMICS_MAX_AGENTS) break;
+        hive_agent_cell_t *cell = &g_dynamics.agents[g_dynamics.agent_count];
+        memset(cell, 0, sizeof(*cell));
+        cell->lifecycle_id = state->selected_id;
+        cell->role         = hive_role_for_age(0, tmpl);
+        cell->age_ticks    = 0U;
+        cell->perf_score   = 50U;
+        cell->signal_count = 1U;
+        g_dynamics.agent_count++;
+        g_dynamics.stats.worker_spawns++;
+        spawned++;
+    }
+    hive_dynamics_recompute_stats(&g_dynamics);
+
+    if (g_agents_board_state != NULL)
+        agent_board_refresh(g_agents_board_state);
+
+    char msg[128];
+    snprintf(msg, sizeof(msg), "Spawned %d %s agent%s.",
+             spawned, tmpl->name, spawned == 1 ? "" : "s");
+
+    /* Re-use the window status bar if available via parent walk */
+    GtkWidget *w = GTK_WIDGET(gtk_widget_get_root(state->list));
+    if (w != NULL)
+        hive_main_window_set_status(w, msg);
+}
+
+static GtkWidget *build_templates_page(void)
+{
+    if (!g_dynamics_inited) {
+        hive_dynamics_init(&g_dynamics, 1);
+        g_dynamics_inited = TRUE;
+    }
+
+    hive_templates_state_t *state = g_new0(hive_templates_state_t, 1);
+    state->selected_id = HIVE_LIFECYCLE_NONE;
+
+    GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+    gtk_widget_add_css_class(page, "hive-templates-page");
+    gtk_widget_set_hexpand(page, TRUE);
+    gtk_widget_set_vexpand(page, TRUE);
+    gtk_widget_set_margin_top(page, 12);
+    gtk_widget_set_margin_bottom(page, 12);
+    gtk_widget_set_margin_start(page, 12);
+    gtk_widget_set_margin_end(page, 12);
+
+    g_object_set_data_full(G_OBJECT(page), "templates-state", state,
+                           templates_state_free);
+
+    /* ---- Hero ---- */
+    GtkWidget *hero = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_add_css_class(hero, "hive-templates-hero");
+
+    GtkWidget *title = gtk_label_new("Lifecycle Templates");
+    gtk_widget_add_css_class(title, "hive-templates-title");
+    gtk_label_set_xalign(GTK_LABEL(title), 0.0);
+    gtk_box_append(GTK_BOX(hero), title);
+
+    GtkWidget *subtitle = gtk_label_new(
+        "Agents age through fixed role stages — like bees. "
+        "Select a template to inspect its stage ladder, then spawn agents that will "
+        "accumulate knowledge in each role before progressing to the next.");
+    gtk_widget_add_css_class(subtitle, "hive-templates-subtitle");
+    gtk_label_set_wrap(GTK_LABEL(subtitle), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(subtitle), 0.0);
+    gtk_box_append(GTK_BOX(hero), subtitle);
+    gtk_box_append(GTK_BOX(page), hero);
+
+    /* ---- Two-column pane ---- */
+    GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_paned_set_position(GTK_PANED(paned), 260);
+    gtk_paned_set_resize_start_child(GTK_PANED(paned), FALSE);
+    gtk_paned_set_resize_end_child(GTK_PANED(paned), TRUE);
+    gtk_paned_set_shrink_start_child(GTK_PANED(paned), FALSE);
+    gtk_paned_set_shrink_end_child(GTK_PANED(paned), FALSE);
+    gtk_widget_set_hexpand(paned, TRUE);
+    gtk_widget_set_vexpand(paned, TRUE);
+
+    /* ---- Left: template list ---- */
+    GtkWidget *list_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(list_scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_add_css_class(list_scroll, "hive-templates-list-scroll");
+    gtk_widget_set_vexpand(list_scroll, TRUE);
+
+    state->list = gtk_list_box_new();
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(state->list), GTK_SELECTION_SINGLE);
+    gtk_widget_add_css_class(state->list, "hive-templates-list");
+    g_signal_connect(state->list, "row-selected",
+                     G_CALLBACK(on_template_row_selected), state);
+
+    size_t n = hive_lifecycle_count();
+    for (size_t i = 0; i < n; ++i) {
+        hive_lifecycle_id_t id = (hive_lifecycle_id_t)(i + 1);
+        const hive_lifecycle_template_t *tmpl = hive_lifecycle_get(id);
+        if (tmpl == NULL) continue;
+
+        GtkWidget *row_content = hive_session_row_new(tmpl->name, tmpl->description);
+        GtkWidget *row = gtk_list_box_row_new();
+        gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), row_content);
+        g_object_set_data(G_OBJECT(row), "lifecycle-id", (gpointer)(gintptr)id);
+        gtk_list_box_append(GTK_LIST_BOX(state->list), row);
+    }
+
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(list_scroll), state->list);
+    gtk_paned_set_start_child(GTK_PANED(paned), list_scroll);
+
+    /* ---- Right: detail panel ---- */
+    GtkWidget *detail = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+    gtk_widget_add_css_class(detail, "hive-templates-detail");
+    gtk_widget_set_hexpand(detail, TRUE);
+    gtk_widget_set_vexpand(detail, TRUE);
+    gtk_widget_set_margin_start(detail, 12);
+
+    state->detail_name = gtk_label_new("Select a template");
+    gtk_widget_add_css_class(state->detail_name, "hive-templates-detail-name");
+    gtk_label_set_xalign(GTK_LABEL(state->detail_name), 0.0);
+    gtk_box_append(GTK_BOX(detail), state->detail_name);
+
+    state->detail_desc = gtk_label_new("");
+    gtk_widget_add_css_class(state->detail_desc, "hive-templates-detail-desc");
+    gtk_label_set_wrap(GTK_LABEL(state->detail_desc), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(state->detail_desc), 0.0);
+    gtk_box_append(GTK_BOX(detail), state->detail_desc);
+
+    GtkWidget *stages_heading = gtk_label_new("Stage ladder");
+    gtk_widget_add_css_class(stages_heading, "hive-templates-section-title");
+    gtk_label_set_xalign(GTK_LABEL(stages_heading), 0.0);
+    gtk_box_append(GTK_BOX(detail), stages_heading);
+
+    GtkWidget *stages_scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(stages_scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_hexpand(stages_scroll, TRUE);
+    gtk_widget_set_vexpand(stages_scroll, TRUE);
+
+    state->stages_grid = gtk_grid_new();
+    gtk_widget_add_css_class(state->stages_grid, "hive-templates-stages-grid");
+    gtk_grid_set_row_spacing(GTK_GRID(state->stages_grid), 8);
+    gtk_grid_set_column_spacing(GTK_GRID(state->stages_grid), 16);
+    gtk_widget_set_margin_top(state->stages_grid, 4);
+    gtk_widget_set_margin_bottom(state->stages_grid, 4);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(stages_scroll), state->stages_grid);
+    gtk_box_append(GTK_BOX(detail), stages_scroll);
+
+    /* ---- Spawn controls ---- */
+    GtkWidget *spawn_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_widget_add_css_class(spawn_row, "hive-templates-spawn-row");
+    gtk_widget_set_hexpand(spawn_row, TRUE);
+
+    GtkWidget *spawn_label = gtk_label_new("Spawn");
+    gtk_box_append(GTK_BOX(spawn_row), spawn_label);
+
+    GtkAdjustment *adj = gtk_adjustment_new(1.0, 1.0, 16.0, 1.0, 4.0, 0.0);
+    state->spawn_spin = gtk_spin_button_new(adj, 1.0, 0);
+    gtk_widget_set_size_request(state->spawn_spin, 72, -1);
+    gtk_box_append(GTK_BOX(spawn_row), state->spawn_spin);
+
+    GtkWidget *spawn_label2 = gtk_label_new("agent(s) with this template");
+    gtk_widget_set_hexpand(spawn_label2, TRUE);
+    gtk_label_set_xalign(GTK_LABEL(spawn_label2), 0.0);
+    gtk_box_append(GTK_BOX(spawn_row), spawn_label2);
+
+    state->spawn_btn = gtk_button_new_with_label("Spawn");
+    gtk_widget_add_css_class(state->spawn_btn, "suggested-action");
+    gtk_widget_set_sensitive(state->spawn_btn, FALSE);
+    g_signal_connect(state->spawn_btn, "clicked",
+                     G_CALLBACK(on_template_spawn_clicked), state);
+    gtk_box_append(GTK_BOX(spawn_row), state->spawn_btn);
+
+    gtk_box_append(GTK_BOX(detail), spawn_row);
+
+    gtk_paned_set_end_child(GTK_PANED(paned), detail);
+    gtk_box_append(GTK_BOX(page), paned);
+
+    /* Auto-select the first template if any exist */
+    GtkListBoxRow *first = gtk_list_box_get_row_at_index(
+        GTK_LIST_BOX(state->list), 0);
+    if (first != NULL)
+        gtk_list_box_select_row(GTK_LIST_BOX(state->list), first);
+
+    return page;
+}
+
 static GtkWidget *build_settings_page(void)
 {
     GtkWidget *scroll = gtk_scrolled_window_new();
@@ -1862,6 +2191,8 @@ GtkWidget *hive_main_window_new(GtkApplication *app,
     gtk_stack_add_named(GTK_STACK(stack),
                         build_agents_page(),   "agents");
     gtk_stack_add_named(GTK_STACK(stack),
+                        build_templates_page(), "templates");
+    gtk_stack_add_named(GTK_STACK(stack),
                         build_knowledge_page(runtime),   "knowledge");
     gtk_stack_add_named(GTK_STACK(stack),
                         build_settings_page(), "settings");
@@ -1974,10 +2305,11 @@ GtkWidget *hive_main_window_new(GtkApplication *app,
                            nav_buttons, (GDestroyNotify)g_ptr_array_unref);
 
     struct { const char *icon; const char *label; const char *page; } nav_items[] = {
-        { "edit-paste-symbolic", "Intake", "intake" },
-        { "applications-science-symbolic", "Agents", "agents" },
-        { "folder-documents-symbolic", "Knowledge", "knowledge" },
-        { "preferences-system-symbolic", "Settings", "settings" },
+        { "edit-paste-symbolic",          "Intake",     "intake"    },
+        { "applications-science-symbolic","Agents",     "agents"    },
+        { "emblem-system-symbolic",       "Templates",  "templates" },
+        { "folder-documents-symbolic",    "Knowledge",  "knowledge" },
+        { "preferences-system-symbolic",  "Settings",   "settings"  },
         { NULL, NULL, NULL }
     };
 

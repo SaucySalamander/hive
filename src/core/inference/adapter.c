@@ -1,8 +1,8 @@
-#include "inference/adapter.h"
+#include "core/inference/adapter.h"
 
-#include "inference/inference.h"
+#include "core/inference/inference.h"
 
-#include "logging/logger.h"
+#include "common/logging/logger.h"
 
 #include <ctype.h>
 #include <stdlib.h>

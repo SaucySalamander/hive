@@ -4,8 +4,8 @@
 #include "core/session.h"
 #include "core/state_machine.h"
 #include "core/types.h"
-#include "inference/adapter.h"
-#include "logging/logger.h"
+#include "core/inference/adapter.h"
+#include "common/logging/logger.h"
 #include "tools/registry.h"
 
 #ifdef __cplusplus

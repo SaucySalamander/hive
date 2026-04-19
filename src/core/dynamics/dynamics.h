@@ -35,13 +35,49 @@ typedef enum hive_signal_type {
 } hive_signal_type_t;
 
 /* ----------------------------------------------------------------
+ * Lifecycle templates — age-driven role progressions
+ * ---------------------------------------------------------------- */
+
+/** Maximum stages per template and slots in the registry. */
+#define HIVE_LIFECYCLE_MAX_STAGES    8
+#define HIVE_LIFECYCLE_MAX_TEMPLATES 16
+
+/**
+ * One stage of a lifecycle template.
+ * start_tick: the agent's age_ticks value at which this stage begins.
+ * role:       role the agent occupies during this stage.
+ * firmness:   100 = forced transition; 0-99 = per-tick chance (%).
+ */
+typedef struct hive_lifecycle_stage {
+    uint32_t          start_tick;
+    hive_agent_role_t role;
+    uint8_t           firmness;   /* 0–100 */
+} hive_lifecycle_stage_t;
+
+/**
+ * A named, ordered sequence of lifecycle stages.
+ * Stages must be sorted by start_tick ascending and start at tick 0.
+ */
+typedef struct hive_lifecycle_template {
+    const char             *name;
+    const char             *description;
+    hive_lifecycle_stage_t  stages[HIVE_LIFECYCLE_MAX_STAGES];
+    size_t                  stage_count;
+} hive_lifecycle_template_t;
+
+/** Template identifier; 0 == HIVE_LIFECYCLE_NONE (no template). */
+typedef uint8_t hive_lifecycle_id_t;
+#define HIVE_LIFECYCLE_NONE 0
+
+/* ----------------------------------------------------------------
  * Per-agent cell state
  * ---------------------------------------------------------------- */
 typedef struct hive_agent_cell {
-    hive_agent_role_t role;
-    uint32_t age_ticks;
-    uint32_t perf_score;     /* 0–100 */
-    uint32_t signal_count;   /* recent signals emitted */
+    hive_agent_role_t   role;
+    uint32_t            age_ticks;
+    uint32_t            perf_score;     /* 0–100 */
+    uint32_t            signal_count;   /* recent signals emitted */
+    hive_lifecycle_id_t lifecycle_id;   /* 0 = no template (legacy transitions) */
 } hive_agent_cell_t;
 
 /* ----------------------------------------------------------------
@@ -72,6 +108,35 @@ typedef struct hive_dynamics {
     size_t agent_count;
     hive_dynamics_stats_t stats;
 } hive_dynamics_t;
+
+/* ----------------------------------------------------------------
+ * Lifecycle registry API
+ * ---------------------------------------------------------------- */
+
+/** Initialise the registry and register built-in templates.
+ *  Called automatically by hive_dynamics_init(). */
+void hive_lifecycle_init_registry(void);
+
+/** Register a template; returns its 1-based id or HIVE_LIFECYCLE_NONE on failure. */
+hive_lifecycle_id_t hive_lifecycle_register(const hive_lifecycle_template_t *tmpl);
+
+/** Look up a registered template by id. Returns NULL for id == 0 or out-of-range. */
+const hive_lifecycle_template_t *hive_lifecycle_get(hive_lifecycle_id_t id);
+
+/** Number of registered templates. */
+size_t hive_lifecycle_count(void);
+
+/** IDs of the built-in templates (valid after hive_lifecycle_init_registry()). */
+hive_lifecycle_id_t hive_lifecycle_builtin_worker(void);
+hive_lifecycle_id_t hive_lifecycle_builtin_queen(void);
+hive_lifecycle_id_t hive_lifecycle_builtin_drone(void);
+
+/**
+ * Return the expected role for an agent at @age_ticks under @tmpl.
+ * Pure function. Returns HIVE_ROLE_EMPTY if tmpl is NULL or empty.
+ */
+hive_agent_role_t hive_role_for_age(uint32_t age_ticks,
+                                    const hive_lifecycle_template_t *tmpl);
 
 /* ----------------------------------------------------------------
  * API

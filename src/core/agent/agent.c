@@ -1,10 +1,10 @@
-#include "core/agent.h"
+#include "core/agent/agent.h"
 
 #include "common/strings.h"
-#include "core/reflexion.h"
+#include "core/reflexion/reflexion.h"
 #include "core/runtime.h"
-#include "inference/adapter.h"
-#include "logging/logger.h"
+#include "core/inference/adapter.h"
+#include "common/logging/logger.h"
 
 #include <stdlib.h>
 #include <string.h>

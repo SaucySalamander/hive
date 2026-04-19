@@ -1,7 +1,7 @@
 #include "core/runtime.h"
 
 #include "common/strings.h"
-#include "core/orchestrator.h"
+#include "core/agent/orchestrator.h"
 #include "tools/registry.h"
 
 #include <stdio.h>

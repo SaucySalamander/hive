@@ -2,7 +2,7 @@
 
 #include "common/strings.h"
 #include "core/runtime.h"
-#include "logging/logger.h"
+#include "common/logging/logger.h"
 
 #if HIVE_HAVE_LIBUV && HIVE_HAVE_CJSON
 

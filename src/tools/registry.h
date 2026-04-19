@@ -2,7 +2,7 @@
 #define HIVE_TOOLS_REGISTRY_H
 
 #include "core/types.h"
-#include "logging/logger.h"
+#include "common/logging/logger.h"
 
 #ifdef __cplusplus
 extern "C" {

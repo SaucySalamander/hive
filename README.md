@@ -2,7 +2,7 @@
 
 `hive` (Harness for Interactive Verification & Execution) is a C23 repository skeleton for a safety-gated, hierarchical agent runtime built around a pure C state machine.
 
-It includes structured JSON logging, a pluggable inference adapter, a tool registry with approval gates, a headless CLI using `argp` on GNU systems, an ncurses-based TUI, and an optional libuv/cJSON API server that stays disabled by default.
+It includes structured JSON logging (implementation: `src/common/logging`), a pluggable inference adapter (implementation: `src/core/inference`), a tool registry with approval gates, a headless CLI using `argp` on GNU systems, an ncurses-based TUI, and an optional libuv/cJSON API server that stays disabled by default.
 
 ## Included
 
@@ -74,7 +74,7 @@ In the TUI, every tool request is approved interactively before execution.
 
 Hive now routes completions through a small backend registry. The built-in mock backend is selected by default, and you can switch backends by setting `HIVE_INFERENCE_BACKEND` and `HIVE_INFERENCE_CONFIG` before launch.
 
-The low-level public API lives in `src/inference/inference.h` and exposes `inf_create()`, `inf_complete_sync()`, `inf_complete_stream()`, `inf_list_models()`, and `inf_cancel()`.
+The low-level public API lives in `src/core/inference/inference.h` and exposes `inf_create()`, `inf_complete_sync()`, `inf_complete_stream()`, `inf_list_models()`, and `inf_cancel()`.
 
 If you want to keep using the legacy adapter wrapper, initialize a named backend with `hive_inference_adapter_init_named()` or fall back to the compatibility mock via `hive_inference_adapter_init_mock()`.
 
