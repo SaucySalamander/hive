@@ -161,7 +161,9 @@ void hive_queen_regulate_population(hive_dynamics_t *d)
     unsigned workers = count_active_workers(d);
 
     /* Spawn one worker per tick until ratio is satisfied or hive is full. */
-    while (d->demand_buffer_depth > workers * HIVE_SPAWN_DEMAND_RATIO
+    uint32_t ratio = d->cfg_spawn_demand_ratio
+                     ? d->cfg_spawn_demand_ratio : HIVE_SPAWN_DEMAND_RATIO;
+    while (d->demand_buffer_depth > workers * ratio
            && d->agent_count < HIVE_DYNAMICS_MAX_AGENTS)
     {
         /* Default traits: balanced worker, inherits Queen's lineage. */
@@ -193,10 +195,13 @@ bool hive_queen_requeue_if_needed(hive_dynamics_t *d)
         d->queen_alive = false;
     }
 
+    uint32_t threshold = d->cfg_requeue_threshold
+                         ? d->cfg_requeue_threshold : HIVE_REQUEUE_THRESHOLD;
+
     const hive_agent_cell_t *queen = &d->agents[d->queen_idx];
     if (d->queen_alive
         && queen->role == HIVE_ROLE_QUEEN
-        && queen->perf_score >= HIVE_REQUEUE_THRESHOLD)
+        && queen->perf_score >= threshold)
     {
         return false;   /* Queen is healthy; no action needed. */
     }
@@ -204,18 +209,39 @@ bool hive_queen_requeue_if_needed(hive_dynamics_t *d)
     /* Find the best worker to promote. */
     size_t candidate = best_worker_idx(d);
     if (candidate == SIZE_MAX) {
-        /* No eligible workers; Queen stays in place even if weak. */
+        if (!d->queen_alive) {
+            /* Bootstrap: no workers and no queen — resurrect slot 0 as queen. */
+            hive_agent_cell_t *slot = &d->agents[0];
+            memset(slot, 0, sizeof(*slot));
+            slot->role         = HIVE_ROLE_QUEEN;
+            slot->perf_score   = 80U;
+            slot->lifecycle_id = hive_lifecycle_builtin_queen();
+            slot->traits       = (hive_agent_traits_t){50U, d->lineage_generation, 0xFFU, 100U};
+            slot->vitality_seen = 100U;
+            slot->conditioned_ok = true;
+            if (d->agent_count == 0) d->agent_count = 1;
+            d->queen_idx   = 0;
+            d->queen_alive = true;
+            d->lineage_generation++;
+            d->vitality_checksum = 50U;
+            d->stats.requeue_events++;
+            d->stats.active_pheromones += 5U;
+            d->stats.total_signals     += 5U;
+            return true;
+        }
+        /* Workers exist (scored 0) but none beat threshold — keep weak queen alive. */
         d->queen_alive = true;
         return false;
     }
 
-    /* Promote candidate to Queen. */
+    /* Promote candidate to Queen — Royal Jelly boost. */
     hive_agent_cell_t *new_queen = &d->agents[candidate];
     uint32_t old_lineage = new_queen->traits.lineage_hash;
 
     new_queen->role         = HIVE_ROLE_QUEEN;
     new_queen->lifecycle_id = hive_lifecycle_builtin_queen();
     new_queen->age_ticks    = 0U;   /* reset age on coronation */
+    new_queen->perf_score   = 80U;  /* Royal Jelly: boosted start vitality */
 
     /* Bump lineage generation and propagate. */
     d->lineage_generation++;
@@ -236,7 +262,8 @@ bool hive_queen_requeue_if_needed(hive_dynamics_t *d)
     /* Re-queening resets vitality partially — the colony needs to stabilise. */
     d->vitality_checksum = 50U;
 
-    /* Emit a pheromone burst to notify workers. */
+    /* Record event and emit a pheromone burst to notify workers. */
+    d->stats.requeue_events++;
     d->stats.active_pheromones += 5U;
     d->stats.total_signals     += 5U;
 

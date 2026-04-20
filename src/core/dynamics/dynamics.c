@@ -187,6 +187,11 @@ void hive_dynamics_init(hive_dynamics_t *d, size_t agent_count)
     d->queen_alive         = true;
     d->lineage_generation  = 1U;
 
+    /* Runtime-tunable thresholds — seeds from compile-time defaults. */
+    d->cfg_vitality_min        = HIVE_VITALITY_MIN;
+    d->cfg_spawn_demand_ratio  = HIVE_SPAWN_DEMAND_RATIO;
+    d->cfg_requeue_threshold   = HIVE_REQUEUE_THRESHOLD;
+
     hive_dynamics_recompute_stats(d);
 }
 

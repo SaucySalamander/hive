@@ -119,6 +119,7 @@ typedef struct hive_dynamics_stats {
     unsigned worker_spawns;
     unsigned quorum_votes;
     unsigned quorum_threshold;
+    unsigned requeue_events;     /* count of successful re-queening events       */
 } hive_dynamics_stats_t;
 
 /* ----------------------------------------------------------------
@@ -147,6 +148,11 @@ typedef struct hive_dynamics {
     size_t   queen_idx;            /* index of the current Queen in agents[]      */
     bool     queen_alive;          /* false triggers re-queening on next tick     */
     uint32_t lineage_generation;   /* incremented on every re-queening event      */
+
+    /* Runtime-tunable colony thresholds (initialised from the #define defaults) */
+    uint32_t cfg_vitality_min;        /* conditioned-ok floor (default 20)          */
+    uint32_t cfg_spawn_demand_ratio;  /* demand/worker spawn ratio (default 3)      */
+    uint32_t cfg_requeue_threshold;   /* Queen perf below this re-queens (default 30)*/
 } hive_dynamics_t;
 
 /* ----------------------------------------------------------------
@@ -207,7 +213,9 @@ const char *hive_signal_type_to_string(hive_signal_type_t type);
 /** True when the colony's vitality signal is strong enough for workers to run. */
 static inline bool hive_vitality_ok(const hive_dynamics_t *d)
 {
-    return d != NULL && d->queen_alive && d->vitality_checksum >= HIVE_VITALITY_MIN;
+    if (d == NULL) return false;
+    uint32_t min = d->cfg_vitality_min ? d->cfg_vitality_min : HIVE_VITALITY_MIN;
+    return d->queen_alive && d->vitality_checksum >= min;
 }
 
 #ifdef __cplusplus

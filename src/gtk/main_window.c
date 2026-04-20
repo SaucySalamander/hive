@@ -21,6 +21,27 @@
 static hive_dynamics_t g_dynamics;
 static gboolean g_dynamics_inited = FALSE;
 
+/* ================================================================
+ * Pheromone vitality ring buffer — feeds the live chart
+ * ================================================================ */
+#define HIVE_VITALITY_HISTORY_LEN 60
+static uint8_t   g_vitality_history[HIVE_VITALITY_HISTORY_LEN];
+static guint     g_vitality_history_len  = 0U;   /* samples stored so far (max 60) */
+static guint     g_vitality_history_head = 0U;   /* next write position            */
+static GtkWidget *g_pheromone_chart      = NULL; /* DrawingArea; may be NULL       */
+
+/** Push one sample into the ring buffer and invalidate the chart widget. */
+static void vitality_history_push(uint8_t sample)
+{
+    g_vitality_history[g_vitality_history_head] = sample;
+    g_vitality_history_head = (g_vitality_history_head + 1U)
+                              % HIVE_VITALITY_HISTORY_LEN;
+    if (g_vitality_history_len < HIVE_VITALITY_HISTORY_LEN)
+        g_vitality_history_len++;
+    if (g_pheromone_chart != NULL)
+        gtk_widget_queue_draw(g_pheromone_chart);
+}
+
 #if 0
 /* ================================================================
  * Hex button — agents/bees page
@@ -779,6 +800,11 @@ static void intake_queue_prompt(hive_intake_state_t *state)
     intake_sync_model_from_backlog(state);
     intake_refresh_backlog_list(state);
     intake_refresh_metrics(state);
+
+    /* Track demand pressure in the pheromone chart. */
+    vitality_history_push((uint8_t)(g_dynamics.vitality_checksum > 100U
+                                    ? 100U : (uint8_t)g_dynamics.vitality_checksum));
+
     gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(state->prompt_view)), "", -1);
     gtk_editable_set_text(GTK_EDITABLE(state->input_entry), "");
 
@@ -819,6 +845,10 @@ static void intake_consult_queen(hive_intake_state_t *state)
 
     intake_refresh_backlog_list(state);
     intake_refresh_metrics(state);
+
+    /* Push vitality sample for the live chart. */
+    vitality_history_push((uint8_t)(g_dynamics.vitality_checksum > 100U
+                                    ? 100U : (uint8_t)g_dynamics.vitality_checksum));
 
     if (g_agents_board_state != NULL) {
         agent_board_refresh(g_agents_board_state);
@@ -1181,6 +1211,101 @@ static GtkWidget *build_agents_page(void)
     return page;
 }
 
+/* ================================================================
+ * Pheromone vitality live chart — Cairo draw function
+ * ================================================================ */
+static void pheromone_chart_draw(GtkDrawingArea *area, cairo_t *cr,
+                                  int width, int height, gpointer user_data)
+{
+    (void)area;
+    (void)user_data;
+
+    /* Background */
+    cairo_set_source_rgb(cr, 0.12, 0.11, 0.09);
+    cairo_paint(cr);
+
+    if (g_vitality_history_len == 0U) return;
+
+    const double pad_left  = 36.0;
+    const double pad_right  = 8.0;
+    const double pad_top    = 8.0;
+    const double pad_bottom = 20.0;
+    double chart_w = width  - pad_left - pad_right;
+    double chart_h = height - pad_top  - pad_bottom;
+    if (chart_w <= 0.0 || chart_h <= 0.0) return;
+
+    /* Y-axis labels: 0, 50, 100 */
+    cairo_set_source_rgb(cr, 0.55, 0.53, 0.44);
+    cairo_select_font_face(cr, "monospace", CAIRO_FONT_SLANT_NORMAL,
+                           CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_font_size(cr, 9.0);
+    const char *ylabels[] = {"100", " 50", "  0"};
+    const double yfrac[]  = {0.0,   0.5,   1.0};
+    for (int i = 0; i < 3; ++i) {
+        double y = pad_top + yfrac[i] * chart_h;
+        cairo_move_to(cr, 2.0, y + 4.0);
+        cairo_show_text(cr, ylabels[i]);
+    }
+
+    /* Threshold line */
+    uint32_t vmin = g_dynamics.cfg_vitality_min
+                    ? g_dynamics.cfg_vitality_min : HIVE_VITALITY_MIN;
+    double threshold_y = pad_top + chart_h * (1.0 - vmin / 100.0);
+    cairo_set_source_rgba(cr, 0.85, 0.33, 0.31, 0.55);  /* soft red */
+    cairo_set_line_width(cr, 1.0);
+    cairo_set_dash(cr, (double[]){4.0, 3.0}, 2, 0.0);
+    cairo_move_to(cr, pad_left, threshold_y);
+    cairo_line_to(cr, pad_left + chart_w, threshold_y);
+    cairo_stroke(cr);
+    cairo_set_dash(cr, NULL, 0, 0.0);
+
+    /* Vitality step-line */
+    guint n = g_vitality_history_len;
+    double dx = chart_w / (double)(HIVE_VITALITY_HISTORY_LEN - 1);
+
+    cairo_set_source_rgba(cr, 0.91, 0.53, 0.06, 0.25);  /* amber fill */
+    /* Walk oldest → newest */
+    guint oldest = (g_vitality_history_head + HIVE_VITALITY_HISTORY_LEN - n)
+                   % HIVE_VITALITY_HISTORY_LEN;
+    double x0 = pad_left + (HIVE_VITALITY_HISTORY_LEN - n) * dx;
+    double y0 = pad_top + chart_h * (1.0 - g_vitality_history[oldest] / 100.0);
+
+    cairo_move_to(cr, x0, pad_top + chart_h);   /* bottom-left of fill area */
+    cairo_line_to(cr, x0, y0);
+    for (guint i = 1; i < n; ++i) {
+        guint idx = (oldest + i) % HIVE_VITALITY_HISTORY_LEN;
+        double x = x0 + i * dx;
+        double y = pad_top + chart_h * (1.0 - g_vitality_history[idx] / 100.0);
+        cairo_line_to(cr, x, y);
+    }
+    double x_last = x0 + (n - 1) * dx;
+    cairo_line_to(cr, x_last, pad_top + chart_h);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+
+    /* Re-draw line on top, opaque */
+    cairo_set_source_rgb(cr, 0.91, 0.53, 0.06);
+    cairo_set_line_width(cr, 1.5);
+    cairo_move_to(cr, x0, y0);
+    for (guint i = 1; i < n; ++i) {
+        guint idx = (oldest + i) % HIVE_VITALITY_HISTORY_LEN;
+        double x = x0 + i * dx;
+        double y = pad_top + chart_h * (1.0 - g_vitality_history[idx] / 100.0);
+        cairo_line_to(cr, x, y);
+    }
+    cairo_stroke(cr);
+
+    /* Latest value badge */
+    guint latest_idx = (g_vitality_history_head + HIVE_VITALITY_HISTORY_LEN - 1U)
+                        % HIVE_VITALITY_HISTORY_LEN;
+    char badge[8];
+    snprintf(badge, sizeof(badge), "%u%%", g_vitality_history[latest_idx]);
+    cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
+    cairo_set_font_size(cr, 10.0);
+    cairo_move_to(cr, x_last + 3.0, y0 - 3.0 < pad_top ? pad_top + 10.0 : y0 - 3.0);
+    cairo_show_text(cr, badge);
+}
+
 static GtkWidget *build_intake_page(void)
 {
     if (!g_dynamics_inited) {
@@ -1258,6 +1383,22 @@ static GtkWidget *build_intake_page(void)
     gtk_box_append(GTK_BOX(metrics), metric_c);
     gtk_box_append(GTK_BOX(metrics), metric_d);
     gtk_box_append(GTK_BOX(page), metrics);
+
+    /* ---- Pheromone vitality live chart ---- */
+    GtkWidget *chart_heading = gtk_label_new("Pheromone vitality");
+    gtk_widget_add_css_class(chart_heading, "hive-intake-section-title");
+    gtk_label_set_xalign(GTK_LABEL(chart_heading), 0.0);
+    gtk_box_append(GTK_BOX(page), chart_heading);
+
+    GtkWidget *chart = gtk_drawing_area_new();
+    gtk_widget_add_css_class(chart, "hive-pheromone-chart");
+    gtk_widget_set_hexpand(chart, TRUE);
+    gtk_widget_set_size_request(chart, -1, 80);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(chart),
+                                   pheromone_chart_draw, NULL, NULL);
+    g_pheromone_chart = chart;
+    g_object_add_weak_pointer(G_OBJECT(chart), (gpointer *)&g_pheromone_chart);
+    gtk_box_append(GTK_BOX(page), chart);
 
     GtkWidget *input_card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
     gtk_widget_add_css_class(input_card, "hive-intake-card");
@@ -1596,6 +1737,10 @@ static GtkWidget *build_knowledge_page(hive_runtime_t *runtime)
              (unsigned)g_dynamics.vitality_checksum,
              g_dynamics.queen_alive ? "alive" : "re-queening");
     knowledge_add_data_row(data_grid, row++, "Queen vitality", number_buf);
+    snprintf(number_buf, sizeof(number_buf), "%u  (gen %u)",
+             g_dynamics.stats.requeue_events,
+             (unsigned)g_dynamics.lineage_generation);
+    knowledge_add_data_row(data_grid, row++, "Re-queening events", number_buf);
 
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(data_scroll), data_grid);
 
@@ -1941,6 +2086,24 @@ static GtkWidget *build_templates_page(void)
     return page;
 }
 
+static void on_cfg_vitality_min_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    g_dynamics.cfg_vitality_min = (uint32_t)gtk_spin_button_get_value_as_int(spin);
+}
+
+static void on_cfg_spawn_ratio_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    g_dynamics.cfg_spawn_demand_ratio = (uint32_t)gtk_spin_button_get_value_as_int(spin);
+}
+
+static void on_cfg_requeue_threshold_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    g_dynamics.cfg_requeue_threshold = (uint32_t)gtk_spin_button_get_value_as_int(spin);
+}
+
 static GtkWidget *build_settings_page(void)
 {
     GtkWidget *scroll = gtk_scrolled_window_new();
@@ -1950,12 +2113,16 @@ static GtkWidget *build_settings_page(void)
     gtk_widget_set_hexpand(scroll, TRUE);
     gtk_widget_set_vexpand(scroll, TRUE);
 
+    GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16);
+    gtk_widget_set_margin_top(outer, 16);
+    gtk_widget_set_margin_bottom(outer, 16);
+    gtk_widget_set_margin_start(outer, 16);
+    gtk_widget_set_margin_end(outer, 16);
+
+    /* ---- Runtime fields (text entries) ---- */
     GtkWidget *grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(grid), 10);
     gtk_grid_set_column_spacing(GTK_GRID(grid), 12);
-    gtk_widget_set_margin_top(grid, 16);
-    gtk_widget_set_margin_start(grid, 16);
-    gtk_widget_set_margin_end(grid, 16);
     gtk_widget_set_hexpand(grid, TRUE);
 
     const char *field_labels[] = {
@@ -1973,8 +2140,88 @@ static GtkWidget *build_settings_page(void)
                                        field_labels[i], -1);
         gtk_grid_attach(GTK_GRID(grid), entry, 1, i, 1, 1);
     }
+    gtk_box_append(GTK_BOX(outer), grid);
 
-    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), grid);
+    /* ---- Colony tuning knobs ---- */
+    GtkWidget *knobs_heading = gtk_label_new("Colony tuning");
+    gtk_label_set_xalign(GTK_LABEL(knobs_heading), 0.0);
+    gtk_widget_add_css_class(knobs_heading, "hive-intake-section-title");
+    gtk_box_append(GTK_BOX(outer), knobs_heading);
+
+    GtkWidget *knobs_grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(knobs_grid), 10);
+    gtk_grid_set_column_spacing(GTK_GRID(knobs_grid), 12);
+    gtk_widget_set_hexpand(knobs_grid, TRUE);
+
+    /* Vitality min */
+    {
+        GtkWidget *lbl = gtk_label_new("Vitality min (0–100)");
+        gtk_label_set_xalign(GTK_LABEL(lbl), 1.0);
+        gtk_grid_attach(GTK_GRID(knobs_grid), lbl, 0, 0, 1, 1);
+
+        GtkWidget *desc = gtk_label_new("Workers are conditioned only above this threshold");
+        gtk_label_set_xalign(GTK_LABEL(desc), 0.0);
+        gtk_widget_add_css_class(desc, "dim-label");
+        gtk_grid_attach(GTK_GRID(knobs_grid), desc, 1, 0, 1, 1);
+
+        GtkWidget *spin = gtk_spin_button_new_with_range(0.0, 100.0, 1.0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin),
+                                  (double)g_dynamics.cfg_vitality_min);
+        gtk_accessible_update_property(GTK_ACCESSIBLE(spin),
+                                       GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                       "Vitality min", -1);
+        g_signal_connect(spin, "value-changed",
+                         G_CALLBACK(on_cfg_vitality_min_changed), NULL);
+        gtk_grid_attach(GTK_GRID(knobs_grid), spin, 2, 0, 1, 1);
+    }
+
+    /* Spawn demand ratio */
+    {
+        GtkWidget *lbl = gtk_label_new("Spawn demand ratio (1–20)");
+        gtk_label_set_xalign(GTK_LABEL(lbl), 1.0);
+        gtk_grid_attach(GTK_GRID(knobs_grid), lbl, 0, 1, 1, 1);
+
+        GtkWidget *desc = gtk_label_new("Spawn a worker when demand > workers \xc3\x97 ratio");
+        gtk_label_set_xalign(GTK_LABEL(desc), 0.0);
+        gtk_widget_add_css_class(desc, "dim-label");
+        gtk_grid_attach(GTK_GRID(knobs_grid), desc, 1, 1, 1, 1);
+
+        GtkWidget *spin = gtk_spin_button_new_with_range(1.0, 20.0, 1.0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin),
+                                  (double)g_dynamics.cfg_spawn_demand_ratio);
+        gtk_accessible_update_property(GTK_ACCESSIBLE(spin),
+                                       GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                       "Spawn demand ratio", -1);
+        g_signal_connect(spin, "value-changed",
+                         G_CALLBACK(on_cfg_spawn_ratio_changed), NULL);
+        gtk_grid_attach(GTK_GRID(knobs_grid), spin, 2, 1, 1, 1);
+    }
+
+    /* Re-queue threshold */
+    {
+        GtkWidget *lbl = gtk_label_new("Re-queue threshold (0–100)");
+        gtk_label_set_xalign(GTK_LABEL(lbl), 1.0);
+        gtk_grid_attach(GTK_GRID(knobs_grid), lbl, 0, 2, 1, 1);
+
+        GtkWidget *desc = gtk_label_new("Queen perf score below this triggers re-queening");
+        gtk_label_set_xalign(GTK_LABEL(desc), 0.0);
+        gtk_widget_add_css_class(desc, "dim-label");
+        gtk_grid_attach(GTK_GRID(knobs_grid), desc, 1, 2, 1, 1);
+
+        GtkWidget *spin = gtk_spin_button_new_with_range(0.0, 100.0, 1.0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin),
+                                  (double)g_dynamics.cfg_requeue_threshold);
+        gtk_accessible_update_property(GTK_ACCESSIBLE(spin),
+                                       GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                       "Re-queue threshold", -1);
+        g_signal_connect(spin, "value-changed",
+                         G_CALLBACK(on_cfg_requeue_threshold_changed), NULL);
+        gtk_grid_attach(GTK_GRID(knobs_grid), spin, 2, 2, 1, 1);
+    }
+
+    gtk_box_append(GTK_BOX(outer), knobs_grid);
+
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), outer);
     return scroll;
 }
 
