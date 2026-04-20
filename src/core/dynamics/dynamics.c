@@ -1,4 +1,5 @@
 #include "core/dynamics/dynamics.h"
+#include "core/queen/queen.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -169,6 +170,22 @@ void hive_dynamics_init(hive_dynamics_t *d, size_t agent_count)
     d->agents[0].perf_score   = 100U;
     d->agents[0].signal_count = 0U;
     d->agents[0].lifecycle_id = g_builtin_queen_id;
+    /* Queen starts with identity traits and full vitality. */
+    d->agents[0].traits = (hive_agent_traits_t){
+        .temperature_pct  = 50U,
+        .lineage_hash     = 1U,
+        .specialization   = 0xFFU,  /* Queen can direct all task types */
+        .resource_cap_pct = 100U,
+    };
+    d->agents[0].vitality_seen  = 100U;
+    d->agents[0].conditioned_ok = true;
+
+    /* Initialise colony vitality state. */
+    d->vitality_checksum   = 100U;
+    d->demand_buffer_depth = 0U;
+    d->queen_idx           = 0U;
+    d->queen_alive         = true;
+    d->lineage_generation  = 1U;
 
     hive_dynamics_recompute_stats(d);
 }
@@ -181,6 +198,12 @@ void hive_dynamics_tick(hive_dynamics_t *d)
 {
     if (d == NULL) return;
 
+    /* 1. Queen emits pheromone — must happen before workers check conditioned_ok. */
+    hive_queen_emit_pheromone(d);
+
+    /* 2. Re-queening check — promote best worker if Queen is weak. */
+    hive_queen_requeue_if_needed(d);
+
     unsigned seed = (unsigned)time(NULL) ^ (unsigned)d->stats.total_signals;
 
     for (size_t i = 0; i < d->agent_count; ++i) {
@@ -188,6 +211,16 @@ void hive_dynamics_tick(hive_dynamics_t *d)
         if (a->role == HIVE_ROLE_EMPTY) continue;
 
         a->age_ticks++;
+
+        /* Conditioned execution gate: workers stand by if vitality signal fails. */
+        if (!a->conditioned_ok && a->role != HIVE_ROLE_QUEEN) {
+            /* Worker is in standby — emit an alarm and skip task behaviour. */
+            d->stats.active_alarms =
+                d->stats.active_alarms < 255U
+                    ? d->stats.active_alarms + 1U
+                    : 255U;
+            continue;
+        }
 
         /* Foragers accumulate signals faster */
         if (a->role == HIVE_ROLE_FORAGER) {
@@ -246,7 +279,7 @@ void hive_dynamics_tick(hive_dynamics_t *d)
             }
         }
 
-        /* Performance drift (all agents) */
+        /* Performance drift (all conditioned agents) */
         seed = seed * 1103515245U + 12345U;
         int delta = ((int)((seed >> 16) % 7)) - 3;
         int new_score = (int)a->perf_score + delta;
@@ -255,14 +288,21 @@ void hive_dynamics_tick(hive_dynamics_t *d)
         a->perf_score = (uint32_t)new_score;
     }
 
+    /* 3. Demand-driven spawning — spawn workers if backlog pressure is high. */
+    hive_queen_regulate_population(d);
+
     /* Global signal activity */
     d->stats.total_signals++;
     seed = seed * 1103515245U + 12345U;
-    d->stats.active_pheromones = 5 + (seed >> 16) % 20;
+    /* Pheromones are now managed by queen, but keep minimum noise floor. */
+    if (d->stats.active_pheromones < 5U) {
+        d->stats.active_pheromones = 5U + (seed >> 16) % 10U;
+    }
     seed = seed * 1103515245U + 12345U;
     d->stats.active_waggles = (seed >> 16) % 8;
     seed = seed * 1103515245U + 12345U;
-    d->stats.active_alarms = (seed >> 16) % 3;
+    if (d->stats.active_alarms > 0U)
+        d->stats.active_alarms--;   /* natural decay each tick */
     seed = seed * 1103515245U + 12345U;
     d->stats.pending_proposals = (seed >> 16) % 4;
     seed = seed * 1103515245U + 12345U;
@@ -290,4 +330,7 @@ void hive_dynamics_recompute_stats(hive_dynamics_t *d)
             d->stats.total_agents++;
         }
     }
+
+    /* Mirror demand buffer into stats so the UI can surface it. */
+    d->stats.backlog_depth = d->demand_buffer_depth;
 }

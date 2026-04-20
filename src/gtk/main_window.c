@@ -4,6 +4,7 @@
 #include "gtk/components/inspector_pane.h"
 #include "gtk/components/status_bar.h"
 #include "core/dynamics/dynamics.h"
+#include "core/queen/queen.h"
 #include "core/runtime.h"
 #include "common/logging/logger.h"
 
@@ -596,11 +597,14 @@ static void intake_refresh_metrics(const hive_intake_state_t *state)
 {
     if (state == NULL) return;
 
-    char buf[64];
+    char buf[128];
     snprintf(buf, sizeof(buf), "%u", g_dynamics.stats.backlog_depth);
     gtk_label_set_text(GTK_LABEL(state->backlog_count_label), buf);
 
-    snprintf(buf, sizeof(buf), "Queen reviews: %u", g_dynamics.stats.queen_reviews);
+    snprintf(buf, sizeof(buf), "Queen reviews: %u  |  Vitality: %u%%%s",
+             g_dynamics.stats.queen_reviews,
+             (unsigned)g_dynamics.vitality_checksum,
+             g_dynamics.queen_alive ? "" : "  [!] re-queening");
     gtk_label_set_text(GTK_LABEL(state->queen_status_label), buf);
 
     snprintf(buf, sizeof(buf), "Worker spawns: %u  |  Active agents: %u",
@@ -691,25 +695,18 @@ static gboolean intake_spawn_worker(hive_agent_role_t role)
         return FALSE;
     }
 
-    hive_agent_cell_t *cell = &g_dynamics.agents[g_dynamics.agent_count];
-    memset(cell, 0, sizeof(*cell));
-    cell->role         = role;
-    cell->age_ticks    = 0U;
-    cell->perf_score   = 50U;
-    cell->signal_count = 1U;
-    /* Attach the built-in worker lifecycle template so the agent ages
-     * through cleaner → nurse → builder → guard → forager. */
-    cell->lifecycle_id = hive_lifecycle_builtin_worker();
-    g_dynamics.agent_count++;
-
-    g_dynamics.stats.worker_spawns++;
-    g_dynamics.stats.total_signals += 2U;
-    g_dynamics.stats.active_pheromones += 1U;
-    g_dynamics.stats.active_waggles += 1U;
-    g_dynamics.stats.quorum_votes = g_dynamics.stats.worker_spawns;
-    g_dynamics.stats.quorum_threshold = g_dynamics.stats.backlog_depth > 0U
-        ? g_dynamics.stats.backlog_depth
-        : 1U;
+    /* Route all spawning through the Queen — she is the exclusive factory. */
+    hive_agent_traits_t traits = {
+        .temperature_pct  = 50U,
+        .lineage_hash     = g_dynamics.lineage_generation,
+        .specialization   = 0U,
+        .resource_cap_pct = 80U,
+    };
+    size_t new_idx = hive_queen_spawn(&g_dynamics, role,
+                                      hive_lifecycle_builtin_worker(), traits);
+    if (new_idx == SIZE_MAX) {
+        return FALSE;
+    }
 
     hive_dynamics_recompute_stats(&g_dynamics);
     return TRUE;
@@ -719,10 +716,13 @@ static void intake_sync_model_from_backlog(hive_intake_state_t *state)
 {
     if (state == NULL || state->backlog_items == NULL) return;
 
-    g_dynamics.stats.backlog_depth = state->backlog_items->len;
-    g_dynamics.stats.pending_proposals = g_dynamics.stats.backlog_depth;
-    g_dynamics.stats.quorum_threshold = g_dynamics.stats.backlog_depth > 0U
-        ? g_dynamics.stats.backlog_depth
+    /* Write into the canonical demand buffer so the Queen's regulation loop
+     * can see it and auto-spawn when pressure is high. */
+    g_dynamics.demand_buffer_depth  = (uint32_t)state->backlog_items->len;
+    g_dynamics.stats.backlog_depth  = g_dynamics.demand_buffer_depth;
+    g_dynamics.stats.pending_proposals = g_dynamics.demand_buffer_depth;
+    g_dynamics.stats.quorum_threshold = g_dynamics.demand_buffer_depth > 0U
+        ? g_dynamics.demand_buffer_depth
         : 1U;
     if (g_dynamics.stats.quorum_votes > g_dynamics.stats.quorum_threshold) {
         g_dynamics.stats.quorum_votes = g_dynamics.stats.quorum_threshold;
@@ -805,11 +805,12 @@ static void intake_consult_queen(hive_intake_state_t *state)
     }
 
     g_ptr_array_remove_index(state->backlog_items, 0);
-    g_dynamics.stats.backlog_depth = state->backlog_items->len;
-    g_dynamics.stats.pending_proposals = g_dynamics.stats.backlog_depth;
+    g_dynamics.demand_buffer_depth   = (uint32_t)state->backlog_items->len;
+    g_dynamics.stats.backlog_depth   = g_dynamics.demand_buffer_depth;
+    g_dynamics.stats.pending_proposals = g_dynamics.demand_buffer_depth;
     g_dynamics.stats.queen_reviews++;
-    g_dynamics.stats.quorum_threshold = g_dynamics.stats.backlog_depth > 0U
-        ? g_dynamics.stats.backlog_depth
+    g_dynamics.stats.quorum_threshold = g_dynamics.demand_buffer_depth > 0U
+        ? g_dynamics.demand_buffer_depth
         : 1U;
     if (g_dynamics.stats.quorum_votes > g_dynamics.stats.quorum_threshold) {
         g_dynamics.stats.quorum_votes = g_dynamics.stats.quorum_threshold;
@@ -1591,6 +1592,10 @@ static GtkWidget *build_knowledge_page(hive_runtime_t *runtime)
              g_dynamics.stats.quorum_votes,
              g_dynamics.stats.quorum_threshold);
     knowledge_add_data_row(data_grid, row++, "Quorum", number_buf);
+    snprintf(number_buf, sizeof(number_buf), "%u / %s",
+             (unsigned)g_dynamics.vitality_checksum,
+             g_dynamics.queen_alive ? "alive" : "re-queening");
+    knowledge_add_data_row(data_grid, row++, "Queen vitality", number_buf);
 
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(data_scroll), data_grid);
 

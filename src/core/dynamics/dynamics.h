@@ -70,6 +70,26 @@ typedef uint8_t hive_lifecycle_id_t;
 #define HIVE_LIFECYCLE_NONE 0
 
 /* ----------------------------------------------------------------
+ * Per-agent trait flags — set at spawn time by the Queen
+ * ---------------------------------------------------------------- */
+typedef struct hive_agent_traits {
+    uint8_t  temperature_pct;  /* 0–100; scaled inference temperature         */
+    uint32_t lineage_hash;     /* parent lineage identifier (inherits Queen's) */
+    uint8_t  specialization;   /* bitmask: which task types this worker handles */
+    uint8_t  resource_cap_pct; /* 0–100; % of token budget available           */
+} hive_agent_traits_t;
+
+/* ----------------------------------------------------------------
+ * Grooming metadata packet — sent from worker to Queen each task
+ * ---------------------------------------------------------------- */
+typedef struct hive_groom_packet {
+    size_t   agent_idx;    /* index into dynamics.agents[]                 */
+    uint32_t task_ticks;   /* ticks spent on last task                     */
+    uint8_t  success;      /* 0 = failed, 100 = perfect                    */
+    uint8_t  alarm_flag;   /* 1 if worker encountered an error condition   */
+} hive_groom_packet_t;
+
+/* ----------------------------------------------------------------
  * Per-agent cell state
  * ---------------------------------------------------------------- */
 typedef struct hive_agent_cell {
@@ -78,6 +98,9 @@ typedef struct hive_agent_cell {
     uint32_t            perf_score;     /* 0–100 */
     uint32_t            signal_count;   /* recent signals emitted */
     hive_lifecycle_id_t lifecycle_id;   /* 0 = no template (legacy transitions) */
+    hive_agent_traits_t traits;         /* per-agent specialisation flags       */
+    uint8_t             vitality_seen;  /* last vitality checksum sniffed       */
+    bool                conditioned_ok; /* allowed to execute this tick?        */
 } hive_agent_cell_t;
 
 /* ----------------------------------------------------------------
@@ -99,14 +122,31 @@ typedef struct hive_dynamics_stats {
 } hive_dynamics_stats_t;
 
 /* ----------------------------------------------------------------
+ * Colony-level vitality constants
+ * ---------------------------------------------------------------- */
+/** Minimum vitality checksum for workers to be conditioned to execute. */
+#define HIVE_VITALITY_MIN          20U
+/** Spawn a new worker when demand > active_workers × this ratio.       */
+#define HIVE_SPAWN_DEMAND_RATIO    3U
+/** Queen vitality below this triggers re-queening.                     */
+#define HIVE_REQUEUE_THRESHOLD     30U
+
+/* ----------------------------------------------------------------
  * Hive dynamics state
  * ---------------------------------------------------------------- */
 #define HIVE_DYNAMICS_MAX_AGENTS 256
 
 typedef struct hive_dynamics {
     hive_agent_cell_t agents[HIVE_DYNAMICS_MAX_AGENTS];
-    size_t agent_count;
+    size_t            agent_count;
     hive_dynamics_stats_t stats;
+
+    /* Queen / vitality pheromone fields */
+    uint32_t vitality_checksum;    /* Queen Substance: rolling success-rate hash  */
+    uint32_t demand_buffer_depth;  /* pending task queue depth fed from outside   */
+    size_t   queen_idx;            /* index of the current Queen in agents[]      */
+    bool     queen_alive;          /* false triggers re-queening on next tick     */
+    uint32_t lineage_generation;   /* incremented on every re-queening event      */
 } hive_dynamics_t;
 
 /* ----------------------------------------------------------------
@@ -159,6 +199,16 @@ char hive_role_to_badge(hive_agent_role_t role);
 
 /** Signal type → display name. */
 const char *hive_signal_type_to_string(hive_signal_type_t type);
+
+/* ----------------------------------------------------------------
+ * Vitality / Queen accessor helpers
+ * ---------------------------------------------------------------- */
+
+/** True when the colony's vitality signal is strong enough for workers to run. */
+static inline bool hive_vitality_ok(const hive_dynamics_t *d)
+{
+    return d != NULL && d->queen_alive && d->vitality_checksum >= HIVE_VITALITY_MIN;
+}
 
 #ifdef __cplusplus
 }
