@@ -1,4 +1,11 @@
 #include "core/queen/queen.h"
+/*
+ * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+ * Include agent.h so that hive_queen_spawn() can call
+ * hive_agent_descriptor_for_role() and hive_agent_clone_descriptor() to bind
+ * an agent descriptor to each newly-spawned cell.
+ */
+#include "core/agent/agent.h"
 
 #include <string.h>
 
@@ -104,6 +111,17 @@ size_t hive_queen_spawn(hive_dynamics_t     *d,
     cell->vitality_seen = (uint8_t)(d->vitality_checksum > 255U
                                      ? 255U : d->vitality_checksum);
     cell->conditioned_ok = hive_vitality_ok(d);
+
+    /*
+     * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+     * Bind a heap-cloned agent descriptor to the new cell.  The scheduler
+     * will free it via hive_agent_free() when the cell is retired.
+     * hive_agent_descriptor_for_role() returns NULL for HIVE_ROLE_DRONE and
+     * HIVE_ROLE_EMPTY so those cells stay unbound, which is intentional.
+     */
+    const hive_agent_t *desc = hive_agent_descriptor_for_role(initial_role);
+    cell->bound_agent        = (desc != NULL) ? hive_agent_clone_descriptor(desc) : NULL;
+    cell->binding_generation = 1U;
 
     d->agent_count++;
     d->stats.worker_spawns++;
@@ -247,6 +265,20 @@ bool hive_queen_requeue_if_needed(hive_dynamics_t *d)
     d->lineage_generation++;
     new_queen->traits.lineage_hash = d->lineage_generation;
     (void)old_lineage;   /* retained for future audit use */
+
+    /*
+     * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+     * Re-bind the promoted cell to the Orchestrator descriptor so it can
+     * act as the new Queen meta-agent.  Free any previous binding first.
+     */
+    if (new_queen->bound_agent != NULL) {
+        hive_agent_free(new_queen->bound_agent);
+    }
+    {
+        const hive_agent_t *qdesc = hive_agent_descriptor_for_role(HIVE_ROLE_QUEEN);
+        new_queen->bound_agent        = (qdesc != NULL) ? hive_agent_clone_descriptor(qdesc) : NULL;
+        new_queen->binding_generation++;
+    }
 
     /* Retire the old Queen cell if slot is valid. */
     if (d->queen_idx < d->agent_count

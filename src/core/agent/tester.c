@@ -32,3 +32,9 @@ hive_status_t hive_tester_run(hive_runtime_t *runtime,
 {
     return hive_agent_run(&tester_agent, runtime, prior_output, critique_out, output_out);
 }
+
+/* OPTION 3: expose the static descriptor for the scheduler binding table. */
+const hive_agent_t *hive_tester_descriptor(void)
+{
+    return &tester_agent;
+}

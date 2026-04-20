@@ -1,5 +1,11 @@
 #include "core/dynamics/dynamics.h"
 #include "core/queen/queen.h"
+/*
+ * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+ * Include agent.h so that hive_dynamics_deinit() can call hive_agent_free()
+ * to release bound_agent pointers allocated by hive_queen_spawn().
+ */
+#include "core/agent/agent.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -192,6 +198,12 @@ void hive_dynamics_init(hive_dynamics_t *d, size_t agent_count)
     d->cfg_spawn_demand_ratio  = HIVE_SPAWN_DEMAND_RATIO;
     d->cfg_requeue_threshold   = HIVE_REQUEUE_THRESHOLD;
 
+    /* OPTION 3: zero run-level stats so the scheduler gets a clean slate. */
+    d->stats.requeen_events_this_run = 0U;
+    d->stats.active_bound_workers    = 0U;
+    d->stats.suppressed_workers      = 0U;
+    d->stats.average_pheromone_latency_ns = 0U;
+
     hive_dynamics_recompute_stats(d);
 }
 
@@ -338,4 +350,28 @@ void hive_dynamics_recompute_stats(hive_dynamics_t *d)
 
     /* Mirror demand buffer into stats so the UI can surface it. */
     d->stats.backlog_depth = d->demand_buffer_depth;
+}
+
+/* ================================================================
+ * hive_dynamics_deinit
+ * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+ *
+ * Frees all bound_agent pointers in agents[] allocated by
+ * hive_queen_spawn() via hive_agent_clone_descriptor(), then zeroes the
+ * struct.  Must be called before the struct is discarded when Option 3 is
+ * active; safe to call on a zeroed or freshly initialised struct.
+ * ================================================================ */
+
+void hive_dynamics_deinit(hive_dynamics_t *d)
+{
+    if (d == NULL) return;
+
+    for (size_t i = 0; i < d->agent_count; ++i) {
+        if (d->agents[i].bound_agent != NULL) {
+            hive_agent_free(d->agents[i].bound_agent);
+            d->agents[i].bound_agent = NULL;
+        }
+    }
+
+    memset(d, 0, sizeof(*d));
 }

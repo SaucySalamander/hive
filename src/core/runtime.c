@@ -3,6 +3,9 @@
 #include "common/strings.h"
 #include "core/agent/orchestrator.h"
 #include "tools/registry.h"
+/* OPTION 3 — Worker-Cell Mapping scheduler */
+#include "core/dynamics/dynamics.h"
+#include "core/scheduler/scheduler.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -214,13 +217,36 @@ hive_status_t hive_runtime_init(hive_runtime_t *runtime,
         return status;
     }
 
+#if !HIVE_LEGACY_SCHEDULER
+    /* OPTION 3 — initialise the colony dynamics and worker-cell scheduler. */
+    hive_dynamics_init(&runtime->dynamics, 0U);  /* 0 = spawn Queen only */
+
+    hive_scheduler_options_t sched_opts;
+    memset(&sched_opts, 0, sizeof(sched_opts));
+    sched_opts.iteration_limit = runtime->options.max_iterations;
+
+    status = hive_scheduler_init(&runtime->scheduler,
+                                 &runtime->dynamics,
+                                 &sched_opts);
+    if (status != HIVE_STATUS_OK) {
+        hive_dynamics_deinit(&runtime->dynamics);
+        hive_state_machine_init(&runtime->machine, 0U);
+        hive_tool_registry_deinit(&runtime->tools);
+        hive_session_deinit(&runtime->session);
+        hive_inference_adapter_deinit(&runtime->adapter);
+        hive_logger_deinit(&runtime->logger);
+        return status;
+    }
+#endif
+
     hive_logger_logf(&runtime->logger,
                          HIVE_LOG_INFO,
                          "runtime",
                          "init",
-                         "workspace=%s iterations=%u",
+                         "workspace=%s iterations=%u scheduler=%s",
                          runtime->session.workspace_root,
-                         runtime->options.max_iterations);
+                         runtime->options.max_iterations,
+                         HIVE_LEGACY_SCHEDULER ? "legacy" : "option3");
     return HIVE_STATUS_OK;
 }
 
@@ -230,6 +256,10 @@ void hive_runtime_deinit(hive_runtime_t *runtime)
         return;
     }
 
+#if !HIVE_LEGACY_SCHEDULER
+    hive_scheduler_deinit(&runtime->scheduler);
+    hive_dynamics_deinit(&runtime->dynamics);
+#endif
     hive_tool_registry_deinit(&runtime->tools);
     hive_session_deinit(&runtime->session);
     hive_inference_adapter_deinit(&runtime->adapter);
@@ -243,5 +273,9 @@ hive_status_t hive_runtime_run(hive_runtime_t *runtime)
         return HIVE_STATUS_INVALID_ARGUMENT;
     }
 
+#if HIVE_LEGACY_SCHEDULER
     return hive_state_machine_run(&runtime->machine, runtime);
+#else
+    return hive_scheduler_run(&runtime->scheduler, runtime);
+#endif
 }

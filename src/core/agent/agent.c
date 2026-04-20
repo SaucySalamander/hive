@@ -5,6 +5,17 @@
 #include "core/runtime.h"
 #include "core/inference/adapter.h"
 #include "common/logging/logger.h"
+/*
+ * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+ * Include all individual agent headers so that hive_agent_descriptor_for_role()
+ * can return the appropriate static descriptor for each colony role.
+ */
+#include "core/agent/orchestrator.h"
+#include "core/agent/planner.h"
+#include "core/agent/coder.h"
+#include "core/agent/tester.h"
+#include "core/agent/verifier.h"
+#include "core/agent/editor.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -127,4 +138,70 @@ hive_status_t hive_agent_run(const hive_agent_t *agent,
     }
 
     return agent->vtable->run(agent, runtime, prior_output, critique_out, output_out);
+}
+
+/* ================================================================
+ * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+ * Agent descriptor lifecycle helpers.
+ * ================================================================ */
+
+hive_agent_t *hive_agent_clone_descriptor(const hive_agent_t *src)
+{
+    if (src == NULL) return NULL;
+
+    hive_agent_t *clone = calloc(1U, sizeof(*clone));
+    if (clone == NULL) return NULL;
+
+    clone->kind   = src->kind;
+    clone->vtable = src->vtable;   /* shared; vtables are static, never freed */
+
+    clone->name = hive_string_dup(src->name);
+    if (src->name != NULL && clone->name == NULL) {
+        free(clone);
+        return NULL;
+    }
+
+    clone->instructions = hive_string_dup(src->instructions);
+    if (src->instructions != NULL && clone->instructions == NULL) {
+        free((char *)clone->name);
+        free(clone);
+        return NULL;
+    }
+
+    return clone;
+}
+
+void hive_agent_free(hive_agent_t *agent)
+{
+    if (agent == NULL) return;
+    free((char *)agent->name);          /* cast: these are heap duplicates */
+    free((char *)agent->instructions);  /* cast: heap duplicate            */
+    free(agent);
+}
+
+/**
+ * Map a colony cell role to the appropriate static agent descriptor.
+ *
+ * Role → Kind mapping:
+ *   QUEEN   → Orchestrator  (meta-task supervision)
+ *   CLEANER → Planner       (planning tasks)
+ *   NURSE   → Planner       (nurturing / planning)
+ *   BUILDER → Coder         (implementation)
+ *   GUARD   → Verifier      (auditing / verification)
+ *   FORAGER → Tester        (searching for defects)
+ *   DRONE   → Editor        (editorial polishing pass)
+ *   EMPTY   → NULL
+ */
+const hive_agent_t *hive_agent_descriptor_for_role(hive_agent_role_t role)
+{
+    switch (role) {
+    case HIVE_ROLE_QUEEN:   return hive_orchestrator_descriptor();
+    case HIVE_ROLE_CLEANER: return hive_planner_descriptor();
+    case HIVE_ROLE_NURSE:   return hive_planner_descriptor();
+    case HIVE_ROLE_BUILDER: return hive_coder_descriptor();
+    case HIVE_ROLE_GUARD:   return hive_verifier_descriptor();
+    case HIVE_ROLE_FORAGER: return hive_tester_descriptor();
+    case HIVE_ROLE_DRONE:   return hive_editor_descriptor();
+    default:                return NULL;
+    }
 }

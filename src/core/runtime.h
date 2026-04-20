@@ -8,6 +8,10 @@
 #include "common/logging/logger.h"
 #include "tools/registry.h"
 
+/* OPTION 3 — Worker-Cell Mapping scheduler */
+#include "core/dynamics/dynamics.h"
+#include "core/scheduler/scheduler.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,7 +46,10 @@ typedef struct hive_runtime {
     hive_inference_adapter_t adapter;
     hive_tool_registry_t tools;
     hive_session_t session;
-    hive_state_machine_t machine;
+    hive_state_machine_t machine;   /* used when HIVE_LEGACY_SCHEDULER=1 */
+    /* OPTION 3 — Worker-Cell Mapping scheduler (used when HIVE_LEGACY_SCHEDULER=0) */
+    hive_dynamics_t  dynamics;
+    hive_scheduler_t scheduler;
 } hive_runtime_t;
 
 /**

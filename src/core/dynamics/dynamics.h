@@ -1,6 +1,15 @@
 #ifndef HIVE_CORE_DYNAMICS_H
 #define HIVE_CORE_DYNAMICS_H
 
+/*
+ * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
+ * Forward-declare hive_agent_t so that hive_agent_cell_t can hold a bound
+ * agent pointer without pulling the full agent.h include chain into every
+ * file that includes dynamics.h.  The complete definition lives in
+ * core/agent/agent.h.
+ */
+struct hive_agent;
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -83,10 +92,14 @@ typedef struct hive_agent_traits {
  * Grooming metadata packet — sent from worker to Queen each task
  * ---------------------------------------------------------------- */
 typedef struct hive_groom_packet {
-    size_t   agent_idx;    /* index into dynamics.agents[]                 */
-    uint32_t task_ticks;   /* ticks spent on last task                     */
-    uint8_t  success;      /* 0 = failed, 100 = perfect                    */
-    uint8_t  alarm_flag;   /* 1 if worker encountered an error condition   */
+    size_t   agent_idx;          /* index into dynamics.agents[]            */
+    uint32_t task_ticks;         /* ticks spent on last task                */
+    uint8_t  success;            /* 0 = failed, 100 = perfect               */
+    uint8_t  alarm_flag;         /* 1 if worker encountered an error        */
+    /* OPTION 3: extended fields for production-grade grooming feedback ---- */
+    uint64_t stage_latency_ns;   /* wall-clock nanoseconds for the stage    */
+    uint8_t  confidence_score;   /* 0–100; derived from last_score.overall  */
+    uint8_t  anomaly_flags;      /* bit 0=low_perf, bit 1=stage_error       */
 } hive_groom_packet_t;
 
 /* ----------------------------------------------------------------
@@ -95,12 +108,18 @@ typedef struct hive_groom_packet {
 typedef struct hive_agent_cell {
     hive_agent_role_t   role;
     uint32_t            age_ticks;
-    uint32_t            perf_score;     /* 0–100 */
-    uint32_t            signal_count;   /* recent signals emitted */
-    hive_lifecycle_id_t lifecycle_id;   /* 0 = no template (legacy transitions) */
-    hive_agent_traits_t traits;         /* per-agent specialisation flags       */
-    uint8_t             vitality_seen;  /* last vitality checksum sniffed       */
-    bool                conditioned_ok; /* allowed to execute this tick?        */
+    uint32_t            perf_score;        /* 0–100                                */
+    uint32_t            signal_count;      /* recent signals emitted               */
+    hive_lifecycle_id_t lifecycle_id;      /* 0 = no template (legacy transitions) */
+    hive_agent_traits_t traits;            /* per-agent specialisation flags       */
+    uint8_t             vitality_seen;     /* last vitality checksum sniffed       */
+    bool                conditioned_ok;    /* allowed to execute this tick?        */
+    /* OPTION 3: worker-cell binding fields ------------------------------------ */
+    struct hive_agent  *bound_agent;       /* NULL for inactive / Queen (default) /
+                                            * drones; allocated by hive_queen_spawn
+                                            * via hive_agent_clone_descriptor();  
+                                            * freed by the scheduler on retirement */
+    uint32_t            binding_generation; /* incremented on each re-binding      */
 } hive_agent_cell_t;
 
 /* ----------------------------------------------------------------
@@ -119,7 +138,12 @@ typedef struct hive_dynamics_stats {
     unsigned worker_spawns;
     unsigned quorum_votes;
     unsigned quorum_threshold;
-    unsigned requeue_events;     /* count of successful re-queening events       */
+    unsigned requeue_events;              /* re-queening events total              */
+    /* OPTION 3: scheduler observability metrics (written by hive_scheduler_run) */
+    unsigned active_bound_workers;        /* cells with bound_agent != NULL        */
+    unsigned suppressed_workers;          /* cells where conditioned_ok == false   */
+    uint64_t average_pheromone_latency_ns; /* stub — 0 until backend exposes this  */
+    unsigned requeen_events_this_run;     /* re-queening events since sched init   */
 } hive_dynamics_stats_t;
 
 /* ----------------------------------------------------------------
@@ -196,6 +220,18 @@ void hive_dynamics_tick(hive_dynamics_t *d);
 
 /** Recompute aggregate stats from the agent array. */
 void hive_dynamics_recompute_stats(hive_dynamics_t *d);
+
+/**
+ * Destroy dynamics state.
+ *
+ * Frees all bound_agent pointers in agents[] (allocated by
+ * hive_queen_spawn() via hive_agent_clone_descriptor()) and zeroes the
+ * struct.  Must be called before the struct goes out of scope when Option 3
+ * is active.  Safe to call on a zeroed struct.
+ *
+ * @param d Colony dynamics state.
+ */
+void hive_dynamics_deinit(hive_dynamics_t *d);
 
 /** Role → short display name. */
 const char *hive_role_to_string(hive_agent_role_t role);
