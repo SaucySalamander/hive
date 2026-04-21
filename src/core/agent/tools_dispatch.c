@@ -1,6 +1,7 @@
 #include "core/agent/tools_dispatch.h"
 
 #include "tools/registry.h"
+#include "core/trace/trace.h"
 #include "common/logging/logger.h"
 #include "common/strings.h"
 
@@ -48,6 +49,22 @@ hive_status_t hive_agent_execute_tool(hive_runtime_t *runtime,
 
     hive_tool_result_t result = {0};
     hive_status_t status = hive_tool_registry_execute(&runtime->tools, &req, &result);
+
+    /* Record the tool call in the trace ring regardless of success. */
+    {
+        const char *path_or_cmd = path != NULL ? path
+                                : command != NULL ? command
+                                : pattern != NULL ? pattern
+                                : "";
+        hive_trace_log_tool(&runtime->tracer,
+                            runtime->trace_agent_index,
+                            "",   /* agent name not available here; index suffices */
+                            runtime->trace_stage,
+                            req.kind,
+                            path_or_cmd,
+                            result.text,
+                            result.exit_code);
+    }
 
     if (status != HIVE_STATUS_OK) {
         free(result.text);

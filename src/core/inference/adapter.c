@@ -7,6 +7,11 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#ifndef HIVE_INFERENCE_TIMEOUT_MS
+#  define HIVE_INFERENCE_TIMEOUT_MS 30000U
+#endif
 
 typedef struct hive_mock_inference_state {
     struct hive_logger *logger;
@@ -86,22 +91,152 @@ static hive_status_t mock_generate(void *state,
         .stream = 0,
     };
 
+    /* Item #9: seed RNG lazily for jitter */
+    static bool s_seeded = false;
+    if (!s_seeded) {
+        srand((unsigned int)time(NULL));
+        s_seeded = true;
+    }
+
+    /* Item #10: read wall-clock timeout from env var once */
+    static unsigned long s_timeout_ms;
+    static bool s_timeout_init = false;
+    if (!s_timeout_init) {
+        s_timeout_ms = HIVE_INFERENCE_TIMEOUT_MS;
+        const char *env_timeout = getenv("HIVE_INFERENCE_TIMEOUT_MS");
+        if (env_timeout != NULL && *env_timeout != '\0') {
+            char *end = NULL;
+            unsigned long val = strtoul(env_timeout, &end, 10);
+            if (end != env_timeout) {
+                s_timeout_ms = val;
+            }
+        }
+        s_timeout_init = true;
+    }
+
+    /* Items #9 + #10: retry loop with backoff and diagnostic timeout */
     char *payload = NULL;
-    const int result = inf_complete_sync(mock_state->ctx, &inf_request, &payload);
+    int result    = INF_ERR;
+
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        /* Item #9: sleep before this attempt (0 ms for 0, 1000 ms for 1, 2000 ms for 2) */
+        if (attempt > 0) {
+            long base_ms  = (long)attempt * 1000L;
+            long low_ms   = base_ms * 4L / 5L;
+            long range_ms = base_ms * 2L / 5L;
+            long sleep_ms = low_ms + (long)(rand() % (int)(range_ms + 1L));
+            struct timespec sleep_ts = {
+                .tv_sec  = sleep_ms / 1000L,
+                .tv_nsec = (sleep_ms % 1000L) * 1000000L,
+            };
+            nanosleep(&sleep_ts, NULL);
+        }
+
+        /* Item #10: record wall-clock start */
+        struct timespec t_start, t_end;
+        clock_gettime(CLOCK_MONOTONIC, &t_start);
+
+        payload = NULL;
+        result  = inf_complete_sync(mock_state->ctx, &inf_request, &payload);
+
+        /* Item #10: check diagnostic timeout after-the-fact */
+        clock_gettime(CLOCK_MONOTONIC, &t_end);
+        long elapsed_ms = (long)(t_end.tv_sec - t_start.tv_sec) * 1000L
+                        + (long)(t_end.tv_nsec - t_start.tv_nsec) / 1000000L;
+        if (s_timeout_ms != 0UL && elapsed_ms > 0L
+                && (unsigned long)elapsed_ms > s_timeout_ms) {
+            if (mock_state->logger != NULL) {
+                hive_logger_logf(mock_state->logger,
+                                 HIVE_LOG_WARN,
+                                 "inference",
+                                 "mock_generate_timeout",
+                                 "inference call took %ldms, limit %lums",
+                                 elapsed_ms, s_timeout_ms);
+            }
+            free(payload);
+            return HIVE_STATUS_IO_ERROR;
+        }
+
+        if (result == INF_OK && payload != NULL) {
+            break;
+        }
+
+        /* Item #9: log warn on non-final failure */
+        if (attempt < 2) {
+            if (mock_state->logger != NULL) {
+                hive_logger_logf(mock_state->logger,
+                                 HIVE_LOG_WARN,
+                                 "inference",
+                                 "mock_generate_retry",
+                                 "attempt %d failed (%s), retrying",
+                                 attempt,
+                                 inf_last_error(mock_state->ctx));
+            }
+        }
+    }
+
+    /* All retries exhausted: handle failure */
     if (result != INF_OK || payload == NULL) {
+        free(payload);
+
+        /* Item #11: synthesise fallback on INF_ERR_BACKEND */
+        if (result == INF_ERR_BACKEND) {
+            if (mock_state->logger != NULL) {
+                hive_logger_log(mock_state->logger,
+                                HIVE_LOG_WARN,
+                                "inference",
+                                "mock_generate_fallback",
+                                "backend unavailable after retries, using fallback response");
+            }
+            response->text = hive_string_dup("[FALLBACK: backend unavailable]");
+            response->estimated_tokens = 5U;
+            return HIVE_STATUS_OK;
+        }
+
+        /* Item #9: log error on final non-backend failure */
         if (mock_state->logger != NULL) {
             hive_logger_logf(mock_state->logger,
-                                 HIVE_LOG_ERROR,
-                                 "inference",
-                                 "mock_generate_failed",
-                                 "%s",
-                                 inf_last_error(mock_state->ctx));
+                             HIVE_LOG_ERROR,
+                             "inference",
+                             "mock_generate_failed",
+                             "%s",
+                             inf_last_error(mock_state->ctx));
         }
         return map_inf_result(result);
     }
 
+    /* Item #12: token budget enforcement (hard cap at 4096 tokens) */
+    size_t tokens = estimate_tokens(payload);
+    if (tokens > 4096U) {
+        if (mock_state->logger != NULL) {
+            hive_logger_logf(mock_state->logger,
+                             HIVE_LOG_WARN,
+                             "inference",
+                             "mock_generate_truncated",
+                             "response truncated from %zu to 4096 tokens",
+                             tokens);
+        }
+        size_t word_count     = 0U;
+        bool in_word          = false;
+        unsigned char *cursor = (unsigned char *)payload;
+        while (*cursor != '\0') {
+            if (isspace(*cursor)) {
+                in_word = false;
+            } else if (!in_word) {
+                in_word = true;
+                ++word_count;
+                if (word_count > 4096U) {
+                    *cursor = '\0';
+                    break;
+                }
+            }
+            ++cursor;
+        }
+        tokens = 4096U;
+    }
+
     response->text = payload;
-    response->estimated_tokens = estimate_tokens(payload);
+    response->estimated_tokens = tokens;
     return HIVE_STATUS_OK;
 }
 

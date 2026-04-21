@@ -1,4 +1,5 @@
 #include "core/queen/queen.h"
+#include "core/scheduler/hive_config.h"
 /*
  * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
  * Include agent.h so that hive_queen_spawn() can call
@@ -141,7 +142,8 @@ size_t hive_queen_spawn(hive_dynamics_t     *d,
  * ================================================================ */
 
 void hive_queen_receive_groom(hive_dynamics_t           *d,
-                              const hive_groom_packet_t *pkt)
+                              const hive_groom_packet_t *pkt,
+                              hive_logger_t             *log)
 {
     if (d == NULL || pkt == NULL) return;
     if (pkt->agent_idx >= d->agent_count) return;
@@ -154,12 +156,37 @@ void hive_queen_receive_groom(hive_dynamics_t           *d,
     if (next > 100U) next = 100U;
     worker->perf_score = next;
 
+    /* Track consecutive alarms for quarantine threshold. */
+    if (pkt->alarm_flag) {
+        worker->consecutive_alarms = (worker->consecutive_alarms < 255U)
+            ? worker->consecutive_alarms + 1U
+            : 255U;
+    } else {
+        worker->consecutive_alarms = 0U;
+    }
+
     /* Alarm: raise the colony alarm counter when a worker signals trouble. */
     if (pkt->alarm_flag) {
         d->stats.active_alarms =
             d->stats.active_alarms < 255U
                 ? d->stats.active_alarms + 1U
                 : 255U;
+    }
+
+    /* Quarantine: permanently suppress workers that alarm too many times. */
+    if (worker->consecutive_alarms >= HIVE_QUARANTINE_ALARM_THRESHOLD) {
+        worker->conditioned_ok = false;
+        worker->perf_score     = 0U;
+        /* Escalate colony alarm level by 5 to signal quarantine event. */
+        d->stats.active_alarms = (d->stats.active_alarms <= 250U)
+            ? d->stats.active_alarms + 5U
+            : 255U;
+        if (log != NULL) {
+            hive_logger_logf(log, HIVE_LOG_WARN, "queen", "quarantine",
+                             "cell[%zu] quarantined after %u consecutive alarms",
+                             pkt->agent_idx,
+                             (unsigned)worker->consecutive_alarms);
+        }
     }
 
     /* Each grooming packet also emits a small pheromone burst. */

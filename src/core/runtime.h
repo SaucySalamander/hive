@@ -11,6 +11,7 @@
 /* OPTION 3 — Worker-Cell Mapping scheduler */
 #include "core/dynamics/dynamics.h"
 #include "core/scheduler/scheduler.h"
+#include "core/trace/trace.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +51,13 @@ typedef struct hive_runtime {
     /* OPTION 3 — Worker-Cell Mapping scheduler (used when HIVE_LEGACY_SCHEDULER=0) */
     hive_dynamics_t  dynamics;
     hive_scheduler_t scheduler;
+    hive_trace_ring_t tracer;     /**< Append-only ring buffer of thoughts and effects. */
+
+    /* Dispatch context: written by the scheduler before each agent call so
+     * that hive_agent_generate() can tag trace entries without changing its
+     * own signature. */
+    int                trace_agent_index;  /**< Current cell slot; -1 = unknown. */
+    hive_agent_stage_t trace_stage;        /**< Current pipeline stage.          */
 } hive_runtime_t;
 
 /**

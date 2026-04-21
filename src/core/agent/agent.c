@@ -4,6 +4,7 @@
 #include "core/reflexion/reflexion.h"
 #include "core/runtime.h"
 #include "core/inference/adapter.h"
+#include "core/trace/trace.h"
 #include "common/logging/logger.h"
 /*
  * OPTION 3 IMPLEMENTATION — WORKER-CELL MAPPING
@@ -30,21 +31,35 @@ static char *compose_prompt(const char *agent_name,
                             const hive_runtime_t *runtime,
                             const char *prior_output)
 {
-    return hive_string_format(
+    /*
+     * Build a chain-of-thought context block from the trace ring.  Pass -1
+     * as agent_index so the Queen and every worker see all recent steps
+     * (cross-agent reasoning), which lets them learn from peers' outcomes.
+     */
+    char *cot = hive_trace_build_cot_context(
+                    &((hive_runtime_t *)(uintptr_t)runtime)->tracer,
+                    -1, 8U);
+
+    char *prompt = hive_string_format(
         "Role: %s\n"
         "Instructions:\n%s\n\n"
         "Workspace root:\n%s\n\n"
         "Project rules:\n%s\n\n"
         "User prompt:\n%s\n\n"
         "Supervisor brief:\n%s\n\n"
-        "Prior output:\n%s\n",
+        "Prior output:\n%s\n\n"
+        "Chain-of-thought context (recent agent trace):\n%s\n",
         safe_text(agent_name),
         safe_text(instructions),
         safe_text(runtime->session.workspace_root),
         safe_text(runtime->session.project_rules),
         safe_text(runtime->session.user_prompt),
         safe_text(runtime->session.orchestrator_brief),
-        safe_text(prior_output));
+        safe_text(prior_output),
+        cot != NULL ? cot : "(no prior trace)");
+
+    free(cot);
+    return prompt;
 }
 
 hive_status_t hive_agent_generate(hive_runtime_t *runtime,
@@ -81,9 +96,9 @@ hive_status_t hive_agent_generate(hive_runtime_t *runtime,
 
     hive_inference_response_t response = {0};
     hive_status_t status = hive_inference_adapter_generate(&runtime->adapter, &request, &response);
-    free(prompt);
 
     if (status != HIVE_STATUS_OK) {
+        free(prompt);
         if (runtime->logger.initialized) {
             hive_logger_logf(&runtime->logger,
                                  HIVE_LOG_ERROR,
@@ -100,12 +115,25 @@ hive_status_t hive_agent_generate(hive_runtime_t *runtime,
     char *refined = NULL;
     status = hive_reflexion_apply(agent_name, response.text, &critique, &refined);
     free(response.text);
+    response.text = NULL;
 
     if (status != HIVE_STATUS_OK) {
+        free(prompt);
         free(critique);
         free(refined);
         return status;
     }
+
+    /* Record the thought process before releasing the prompt buffer. */
+    hive_trace_log_thought(&runtime->tracer,
+                           runtime->trace_agent_index,
+                           agent_name,
+                           runtime->trace_stage,
+                           prompt,
+                           refined,
+                           critique);
+    free(prompt);
+    prompt = NULL;
 
     if (critique_out != NULL) {
         *critique_out = critique;

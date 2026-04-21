@@ -34,6 +34,23 @@
 #  define HIVE_SCHEDULER_MIN_PERF_SCORE 10U
 #endif
 
+/**
+ * Number of consecutive alarm packets that trigger permanent worker quarantine.
+ * Once reached the worker's conditioned_ok is cleared and perf_score zeroed.
+ */
+#ifndef HIVE_QUARANTINE_ALARM_THRESHOLD
+#  define HIVE_QUARANTINE_ALARM_THRESHOLD 3U
+#endif
+
+/**
+ * Wall-clock nanoseconds after which a stage that returned HIVE_STATUS_OK is
+ * still treated as a failure (HIVE_STATUS_IO_ERROR) for grooming purposes.
+ * Default: 120 seconds.
+ */
+#ifndef HIVE_STAGE_TIMEOUT_NS
+#  define HIVE_STAGE_TIMEOUT_NS (120ULL * 1000000000ULL)  /* 120 seconds */
+#endif
+
 /* ----------------------------------------------------------------
  * Binding mode constants
  * ---------------------------------------------------------------- */

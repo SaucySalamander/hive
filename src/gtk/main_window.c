@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
 
 /* ================================================================
@@ -262,6 +263,175 @@ static GtkWidget *build_agents_page(void)
 
 #if 1
 /* ================================================================
+ * Trace page state — populated by the 1s tick from the runtime ring
+ * ================================================================ */
+static hive_runtime_t *g_trace_runtime    = NULL;
+static GtkWidget      *g_trace_list_box   = NULL;
+static GtkWidget      *g_trace_count_lbl  = NULL;
+
+/* Maximum entries shown in the list at any one time. */
+#define HIVE_TRACE_UI_MAX 64U
+
+static void trace_list_refresh(void)
+{
+    if (g_trace_list_box == NULL || g_trace_runtime == NULL) return;
+
+    /* Snapshot newest-first. */
+    hive_trace_entry_t snap[HIVE_TRACE_UI_MAX];
+    unsigned n = hive_trace_snapshot(&g_trace_runtime->tracer, snap,
+                                     HIVE_TRACE_UI_MAX);
+
+    /* Remove old rows. */
+    GtkWidget *child;
+    while ((child = gtk_widget_get_first_child(g_trace_list_box)) != NULL)
+        gtk_list_box_remove(GTK_LIST_BOX(g_trace_list_box), child);
+
+    /* Rebuild rows newest-first. */
+    for (unsigned i = 0U; i < n; i++) {
+        const hive_trace_entry_t *e = &snap[i];
+
+        GtkWidget *row_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+        gtk_widget_add_css_class(row_box, "hive-trace-row");
+        gtk_widget_set_margin_top(row_box, 4);
+        gtk_widget_set_margin_bottom(row_box, 4);
+        gtk_widget_set_margin_start(row_box, 8);
+        gtk_widget_set_margin_end(row_box, 8);
+
+        /* Header: kind badge + agent/stage + timestamp */
+        GtkWidget *header_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+
+        GtkWidget *kind_lbl = gtk_label_new(hive_trace_kind_to_string(e->kind));
+        gtk_widget_add_css_class(kind_lbl, "hive-trace-kind");
+        if (e->kind == HIVE_TRACE_THOUGHT)
+            gtk_widget_add_css_class(kind_lbl, "hive-trace-thought");
+        else if (e->kind == HIVE_TRACE_TOOL_CALL)
+            gtk_widget_add_css_class(kind_lbl, "hive-trace-tool");
+        else
+            gtk_widget_add_css_class(kind_lbl, "hive-trace-effect");
+        gtk_box_append(GTK_BOX(header_box), kind_lbl);
+
+        char agent_buf[80];
+        if (e->agent_name[0] != '\0') {
+            snprintf(agent_buf, sizeof(agent_buf), "%s [%d] / %s",
+                     e->agent_name, e->agent_index,
+                     hive_agent_stage_to_string(e->stage));
+        } else {
+            snprintf(agent_buf, sizeof(agent_buf), "cell[%d] / %s",
+                     e->agent_index,
+                     hive_agent_stage_to_string(e->stage));
+        }
+        GtkWidget *agent_lbl = gtk_label_new(agent_buf);
+        gtk_widget_add_css_class(agent_lbl, "hive-trace-agent");
+        gtk_label_set_xalign(GTK_LABEL(agent_lbl), 0.0);
+        gtk_widget_set_hexpand(agent_lbl, TRUE);
+        gtk_box_append(GTK_BOX(header_box), agent_lbl);
+
+        char ts_buf[32];
+        snprintf(ts_buf, sizeof(ts_buf), "%.1f ms",
+                 (double)e->timestamp_ns / 1.0e6);
+        GtkWidget *ts_lbl = gtk_label_new(ts_buf);
+        gtk_widget_add_css_class(ts_lbl, "hive-trace-ts");
+        gtk_box_append(GTK_BOX(header_box), ts_lbl);
+
+        gtk_box_append(GTK_BOX(row_box), header_box);
+
+        /* Summary line. */
+        if (e->summary[0] != '\0') {
+            GtkWidget *sum_lbl = gtk_label_new(e->summary);
+            gtk_widget_add_css_class(sum_lbl, "hive-trace-summary");
+            gtk_label_set_xalign(GTK_LABEL(sum_lbl), 0.0);
+            gtk_label_set_ellipsize(GTK_LABEL(sum_lbl), PANGO_ELLIPSIZE_END);
+            gtk_label_set_max_width_chars(GTK_LABEL(sum_lbl), 120);
+            gtk_label_set_selectable(GTK_LABEL(sum_lbl), TRUE);
+            gtk_box_append(GTK_BOX(row_box), sum_lbl);
+        }
+
+        /* Expandable output + critique. */
+        if (e->output[0] != '\0' || e->critique[0] != '\0') {
+            char detail_buf[768];
+            snprintf(detail_buf, sizeof(detail_buf),
+                     "Output:\n%s\n\nCritique/meta:\n%s",
+                     e->output[0]   != '\0' ? e->output   : "(none)",
+                     e->critique[0] != '\0' ? e->critique : "(none)");
+
+            GtkWidget *expander = gtk_expander_new("Details");
+            gtk_widget_add_css_class(expander, "hive-trace-expander");
+            GtkWidget *detail_lbl = gtk_label_new(detail_buf);
+            gtk_widget_add_css_class(detail_lbl, "hive-trace-detail");
+            gtk_label_set_xalign(GTK_LABEL(detail_lbl), 0.0);
+            gtk_label_set_wrap(GTK_LABEL(detail_lbl), TRUE);
+            gtk_label_set_selectable(GTK_LABEL(detail_lbl), TRUE);
+            gtk_label_set_max_width_chars(GTK_LABEL(detail_lbl), 120);
+            gtk_expander_set_child(GTK_EXPANDER(expander), detail_lbl);
+            gtk_box_append(GTK_BOX(row_box), expander);
+        }
+
+        gtk_list_box_append(GTK_LIST_BOX(g_trace_list_box), row_box);
+    }
+
+    if (g_trace_count_lbl != NULL) {
+        char count_buf[48];
+        snprintf(count_buf, sizeof(count_buf), "%u entries (%u shown)",
+                 g_trace_runtime->tracer.count, n);
+        gtk_label_set_text(GTK_LABEL(g_trace_count_lbl), count_buf);
+    }
+}
+
+static GtkWidget *build_trace_page(hive_runtime_t *runtime)
+{
+    g_trace_runtime = runtime;
+
+    GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    gtk_widget_add_css_class(page, "hive-trace-page");
+    gtk_widget_set_hexpand(page, TRUE);
+    gtk_widget_set_vexpand(page, TRUE);
+    gtk_widget_set_margin_top(page, 12);
+    gtk_widget_set_margin_start(page, 12);
+    gtk_widget_set_margin_end(page, 12);
+    gtk_widget_set_margin_bottom(page, 12);
+
+    /* Header row */
+    GtkWidget *hero = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    GtkWidget *title = gtk_label_new("Agent Trace");
+    gtk_widget_add_css_class(title, "hive-knowledge-title");
+    gtk_label_set_xalign(GTK_LABEL(title), 0.0);
+    gtk_widget_set_hexpand(title, TRUE);
+    gtk_box_append(GTK_BOX(hero), title);
+
+    GtkWidget *count_chip = gtk_label_new("0 entries");
+    gtk_widget_add_css_class(count_chip, "hive-knowledge-chip");
+    g_trace_count_lbl = count_chip;
+    gtk_box_append(GTK_BOX(hero), count_chip);
+    gtk_box_append(GTK_BOX(page), hero);
+
+    GtkWidget *subtitle = gtk_label_new(
+        "Live feed of every agent thought, tool call, and side effect — newest first. "
+        "Each thought excerpt is also fed back as chain-of-thought context on the next call.");
+    gtk_widget_add_css_class(subtitle, "hive-knowledge-subtitle");
+    gtk_label_set_xalign(GTK_LABEL(subtitle), 0.0);
+    gtk_label_set_wrap(GTK_LABEL(subtitle), TRUE);
+    gtk_box_append(GTK_BOX(page), subtitle);
+
+    /* Scrolled list */
+    GtkWidget *scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_hexpand(scroll, TRUE);
+    gtk_widget_set_vexpand(scroll, TRUE);
+
+    GtkWidget *list_box = gtk_list_box_new();
+    gtk_widget_add_css_class(list_box, "hive-trace-list");
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(list_box), GTK_SELECTION_NONE);
+    g_trace_list_box = list_box;
+
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), list_box);
+    gtk_box_append(GTK_BOX(page), scroll);
+
+    trace_list_refresh();
+    return page;
+}
+
+/* ================================================================
  * Page builders
  * ================================================================ */
 
@@ -391,6 +561,38 @@ static void hex_draw_fn(GtkDrawingArea *area, cairo_t *cr,
     cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
     pango_cairo_show_layout(cr, layout);
     g_object_unref(layout);
+
+    /* Perf-score sub-label (bottom of hex) — stage proxy */
+    if (h->agent_index >= 0 &&
+        (size_t)h->agent_index < g_dynamics.agent_count &&
+        g_dynamics.agents[h->agent_index].role != HIVE_ROLE_EMPTY) {
+        uint32_t score = g_dynamics.agents[h->agent_index].perf_score;
+        if (score > 100U) score = 100U;
+        char sc_buf[8];
+        snprintf(sc_buf, sizeof(sc_buf), "%u%%", score);
+        cairo_select_font_face(cr, "sans",
+                               CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
+        cairo_set_font_size(cr, 7.5);
+        cairo_text_extents_t te;
+        cairo_text_extents(cr, sc_buf, &te);
+        cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.80);
+        cairo_move_to(cr, cx - te.width / 2.0 - te.x_bearing,
+                      cy + r * 0.52);
+        cairo_show_text(cr, sc_buf);
+    }
+
+    /* Alarm badge — red dot (top-right) if quarantined or low score */
+    if (h->agent_index >= 0 &&
+        (size_t)h->agent_index < g_dynamics.agent_count) {
+        const hive_agent_cell_t *cell = &g_dynamics.agents[h->agent_index];
+        if (cell->consecutive_alarms > 0U || !cell->conditioned_ok ||
+            (cell->role != HIVE_ROLE_EMPTY && cell->perf_score < 30U)) {
+            cairo_set_source_rgba(cr, 0.90, 0.20, 0.20, 0.90);
+            cairo_arc(cr, cx + r * 0.58, cy - r * 0.58, 5.0, 0.0, 2.0 * M_PI);
+            cairo_fill(cr);
+        }
+    }
+
     cairo_restore(cr);
 }
 
@@ -417,6 +619,49 @@ static void hex_gesture_pressed(GtkGestureClick *gesture,
     if (point_in_hexagon(x, y, pts, 6)) {
         h->pressed = !h->pressed;
         gtk_widget_queue_draw(h->area);
+
+        /* Agent detail popover on press */
+        if (h->pressed && h->agent_index >= 0 &&
+            (size_t)h->agent_index < g_dynamics.agent_count &&
+            g_dynamics.agents[h->agent_index].role != HIVE_ROLE_EMPTY) {
+
+            const hive_agent_cell_t *cell =
+                &g_dynamics.agents[h->agent_index];
+
+            char detail[256];
+            snprintf(detail, sizeof(detail),
+                     "Role: %s\nAge: %u ticks\nScore: %u%%"
+                     "\nAlarms: %u\nConditioned: %s\nSignals: %u",
+                     hive_role_to_string(cell->role),
+                     cell->age_ticks,
+                     cell->perf_score > 100U ? 100U : cell->perf_score,
+                     (unsigned)cell->consecutive_alarms,
+                     cell->conditioned_ok ? "yes" : "no",
+                     cell->signal_count);
+
+            /* Reuse existing popover or create one */
+            GtkWidget *pop = g_object_get_data(G_OBJECT(h->area),
+                                               "detail-popover");
+            if (pop == NULL) {
+                pop = gtk_popover_new();
+                gtk_widget_set_parent(pop, h->area);
+                GtkWidget *lbl = gtk_label_new(detail);
+                gtk_widget_add_css_class(lbl, "hive-agent-detail-label");
+                gtk_label_set_xalign(GTK_LABEL(lbl), 0.0);
+                gtk_widget_set_margin_top(lbl, 8);
+                gtk_widget_set_margin_bottom(lbl, 8);
+                gtk_widget_set_margin_start(lbl, 10);
+                gtk_widget_set_margin_end(lbl, 10);
+                gtk_popover_set_child(GTK_POPOVER(pop), lbl);
+                gtk_popover_set_autohide(GTK_POPOVER(pop), TRUE);
+                g_object_set_data(G_OBJECT(h->area), "detail-popover", pop);
+            } else {
+                GtkWidget *lbl = gtk_popover_get_child(GTK_POPOVER(pop));
+                if (GTK_IS_LABEL(lbl))
+                    gtk_label_set_text(GTK_LABEL(lbl), detail);
+            }
+            gtk_popover_popup(GTK_POPOVER(pop));
+        }
     }
 }
 
@@ -1123,21 +1368,23 @@ static GtkWidget *build_agents_page(void)
     gtk_widget_set_vexpand(board, TRUE);
 
     const int hex_size = 100;
-    const int cols = 15;
-    const int rows = 10;
-    const int step_x = 100;
-    const int step_y = 86;
-    const int board_w = 1500;
-    const int board_h = 796;
-    const int offset_x = (1740 - board_w) / 2;
-    const int offset_y = (860 - board_h) / 2;
+    /* Derive grid dimensions from HIVE_DYNAMICS_MAX_AGENTS so the board
+     * always has enough slots regardless of the compile-time capacity. */
+    const int cols     = 15;
+    const int rows     = ((int)HIVE_DYNAMICS_MAX_AGENTS + cols - 1) / cols;
+    const int step_x   = 100;
+    const int step_y   = 86;
+    const int board_w  = cols * step_x;
+    const int board_h  = rows * step_y;
+    const int offset_x = 120;
+    const int offset_y = 32;
 
     agent_board_state_t *state = g_new0(agent_board_state_t, 1);
     state->board = board;
     state->shell = board_shell;
     state->cells = g_ptr_array_new_with_free_func(g_free);
-    state->base_width = 1670;
-    state->base_height = 906;
+    state->base_width  = board_w + step_x + 2 * offset_x;
+    state->base_height = board_h + step_y / 2 + 2 * offset_y;
     state->zoom = 1.0;
     state->min_zoom = 0.5;
     state->max_zoom = 2.5;
@@ -2104,6 +2351,32 @@ static void on_cfg_requeue_threshold_changed(GtkSpinButton *spin, gpointer user_
     g_dynamics.cfg_requeue_threshold = (uint32_t)gtk_spin_button_get_value_as_int(spin);
 }
 
+static uint32_t g_score_threshold_pct = 60U;
+
+static void on_cfg_score_threshold_changed(GtkSpinButton *spin, gpointer user_data)
+{
+    (void)user_data;
+    g_score_threshold_pct = (uint32_t)gtk_spin_button_get_value_as_int(spin);
+    char thr_buf[8];
+    snprintf(thr_buf, sizeof(thr_buf), "%u", g_score_threshold_pct);
+    setenv("HIVE_SCORE_THRESHOLD", thr_buf, 1);
+}
+
+static const char * const s_backend_names[] =
+    { "mock", "ollama", "sapphire", "copilotcli", NULL };
+
+static void on_cfg_backend_changed(GObject *drop, GParamSpec *pspec,
+                                   gpointer user_data)
+{
+    (void)pspec;
+    (void)user_data;
+    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(drop));
+    guint n = 0;
+    while (s_backend_names[n] != NULL) n++;
+    if (sel < n)
+        setenv("HIVE_INFERENCE_BACKEND", s_backend_names[sel], 1);
+}
+
 static GtkWidget *build_settings_page(void)
 {
     GtkWidget *scroll = gtk_scrolled_window_new();
@@ -2219,7 +2492,63 @@ static GtkWidget *build_settings_page(void)
         gtk_grid_attach(GTK_GRID(knobs_grid), spin, 2, 2, 1, 1);
     }
 
+    /* Score threshold */
+    {
+        GtkWidget *lbl = gtk_label_new("Score threshold (0-100)");
+        gtk_label_set_xalign(GTK_LABEL(lbl), 1.0);
+        gtk_grid_attach(GTK_GRID(knobs_grid), lbl, 0, 3, 1, 1);
+
+        GtkWidget *desc = gtk_label_new("Minimum acceptable eval score for the scheduler");
+        gtk_label_set_xalign(GTK_LABEL(desc), 0.0);
+        gtk_widget_add_css_class(desc, "dim-label");
+        gtk_grid_attach(GTK_GRID(knobs_grid), desc, 1, 3, 1, 1);
+
+        GtkWidget *spin = gtk_spin_button_new_with_range(0.0, 100.0, 1.0);
+        gtk_spin_button_set_value(GTK_SPIN_BUTTON(spin),
+                                  (double)g_score_threshold_pct);
+        gtk_accessible_update_property(GTK_ACCESSIBLE(spin),
+                                       GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                       "Score threshold", -1);
+        g_signal_connect(spin, "value-changed",
+                         G_CALLBACK(on_cfg_score_threshold_changed), NULL);
+        gtk_grid_attach(GTK_GRID(knobs_grid), spin, 2, 3, 1, 1);
+    }
+
     gtk_box_append(GTK_BOX(outer), knobs_grid);
+
+    /* ---- Inference backend selector ---- */
+    GtkWidget *backend_heading = gtk_label_new("Inference backend");
+    gtk_label_set_xalign(GTK_LABEL(backend_heading), 0.0);
+    gtk_widget_add_css_class(backend_heading, "hive-intake-section-title");
+    gtk_box_append(GTK_BOX(outer), backend_heading);
+
+    GtkWidget *backend_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_widget_set_hexpand(backend_row, TRUE);
+    gtk_widget_set_margin_start(backend_row, 4);
+
+    GtkWidget *backend_lbl = gtk_label_new("Backend");
+    gtk_label_set_xalign(GTK_LABEL(backend_lbl), 1.0);
+    gtk_widget_set_size_request(backend_lbl, 180, -1);
+    gtk_box_append(GTK_BOX(backend_row), backend_lbl);
+
+    GtkWidget *backend_desc = gtk_label_new(
+        "Sets HIVE_INFERENCE_BACKEND for the next run (requires restart)");
+    gtk_label_set_xalign(GTK_LABEL(backend_desc), 0.0);
+    gtk_widget_add_css_class(backend_desc, "dim-label");
+    gtk_widget_set_hexpand(backend_desc, TRUE);
+    gtk_box_append(GTK_BOX(backend_row), backend_desc);
+
+    GtkStringList *backend_list = gtk_string_list_new(s_backend_names);
+    GtkWidget *backend_drop = gtk_drop_down_new(G_LIST_MODEL(backend_list), NULL);
+    g_object_unref(backend_list);
+    gtk_widget_set_size_request(backend_drop, 150, -1);
+    gtk_accessible_update_property(GTK_ACCESSIBLE(backend_drop),
+                                   GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                   "Inference backend", -1);
+    g_signal_connect(backend_drop, "notify::selected",
+                     G_CALLBACK(on_cfg_backend_changed), NULL);
+    gtk_box_append(GTK_BOX(backend_row), backend_drop);
+    gtk_box_append(GTK_BOX(outer), backend_row);
 
     gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), outer);
     return scroll;
@@ -2366,6 +2695,30 @@ void hive_main_window_set_status(GtkWidget *window, const char *message)
 }
 
 /* ================================================================
+ * Periodic dynamics tick — fires every 1 s to advance simulation
+ * and refresh the vitality chart + agent board without user action.
+ * ================================================================ */
+static gboolean on_vitality_tick(gpointer user_data)
+{
+    (void)user_data;
+    if (!g_dynamics_inited) return G_SOURCE_CONTINUE;
+
+    hive_dynamics_tick(&g_dynamics);
+    hive_dynamics_recompute_stats(&g_dynamics);
+
+    uint8_t v = (uint8_t)(g_dynamics.vitality_checksum > 100U
+                          ? 100U : g_dynamics.vitality_checksum);
+    vitality_history_push(v);
+
+    if (g_agents_board_state != NULL)
+        agent_board_refresh(g_agents_board_state);
+
+    trace_list_refresh();
+
+    return G_SOURCE_CONTINUE;
+}
+
+/* ================================================================
  * Main window constructor
  * ================================================================ */
 
@@ -2446,6 +2799,8 @@ GtkWidget *hive_main_window_new(GtkApplication *app,
                         build_templates_page(), "templates");
     gtk_stack_add_named(GTK_STACK(stack),
                         build_knowledge_page(runtime),   "knowledge");
+    gtk_stack_add_named(GTK_STACK(stack),
+                        build_trace_page(runtime),       "trace");
     gtk_stack_add_named(GTK_STACK(stack),
                         build_settings_page(), "settings");
     gtk_stack_set_visible_child_name(GTK_STACK(stack), "intake");
@@ -2561,6 +2916,7 @@ GtkWidget *hive_main_window_new(GtkApplication *app,
         { "applications-science-symbolic","Agents",     "agents"    },
         { "emblem-system-symbolic",       "Templates",  "templates" },
         { "folder-documents-symbolic",    "Knowledge",  "knowledge" },
+        { "utilities-terminal-symbolic",  "Trace",      "trace"     },
         { "preferences-system-symbolic",  "Settings",   "settings"  },
         { NULL, NULL, NULL }
     };
@@ -2644,6 +3000,9 @@ GtkWidget *hive_main_window_new(GtkApplication *app,
                 search_btn, NULL)));
 
     gtk_widget_add_controller(window, GTK_EVENT_CONTROLLER(sc));
+
+    /* ---- Periodic UI tick: advance dynamics and refresh vitality chart ---- */
+    g_timeout_add(1000U, on_vitality_tick, NULL);
 
     gtk_window_present(GTK_WINDOW(window));
     return window;

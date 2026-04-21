@@ -1055,3 +1055,75 @@ window.hive-dark .hive-stats-label {
 window.hive-dark .hive-legend-label {
     color: #9A9AA4;
 }
+
+/* ----------------------------------------------------------------
+ * Trace page
+ * ---------------------------------------------------------------- */
+.hive-trace-page {
+    background: @theme_bg_color;
+}
+
+.hive-trace-list {
+    background: transparent;
+}
+
+.hive-trace-row {
+    border-bottom: 1px solid alpha(@hive_border, 0.5);
+    padding: 4px 0;
+}
+
+.hive-trace-kind {
+    font-size: 10px;
+    font-weight: bold;
+    border-radius: 3px;
+    padding: 1px 5px;
+    min-width: 52px;
+}
+
+.hive-trace-thought {
+    background-color: alpha(#5B9BD5, 0.18);
+    color: #5B9BD5;
+}
+
+.hive-trace-tool {
+    background-color: alpha(#70B869, 0.18);
+    color: #70B869;
+}
+
+.hive-trace-effect {
+    background-color: alpha(#E4A44A, 0.18);
+    color: #E4A44A;
+}
+
+.hive-trace-agent {
+    font-size: 11px;
+    color: @hive_text_secondary;
+}
+
+.hive-trace-ts {
+    font-size: 10px;
+    color: @hive_text_secondary;
+    min-width: 72px;
+}
+
+.hive-trace-summary {
+    font-size: 12px;
+    color: @theme_fg_color;
+}
+
+.hive-trace-detail {
+    font-size: 11px;
+    font-family: monospace;
+    color: @hive_text_secondary;
+}
+
+.hive-trace-expander {
+    padding: 2px 0;
+}
+
+window.hive-dark .hive-trace-thought { color: #79B8F0; background-color: alpha(#79B8F0, 0.14); }
+window.hive-dark .hive-trace-tool    { color: #85E89D; background-color: alpha(#85E89D, 0.14); }
+window.hive-dark .hive-trace-effect  { color: #FFAB70; background-color: alpha(#FFAB70, 0.14); }
+window.hive-dark .hive-trace-agent   { color: #9A9AA4; }
+window.hive-dark .hive-trace-ts      { color: #9A9AA4; }
+window.hive-dark .hive-trace-detail  { color: #9A9AA4; }

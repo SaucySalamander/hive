@@ -12,6 +12,7 @@
  */
 
 #include "core/dynamics/dynamics.h"
+#include "common/logging/logger.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -73,8 +74,9 @@ size_t hive_queen_spawn(hive_dynamics_t        *d,
  * @param d   Colony dynamics state.
  * @param pkt Grooming packet produced by the worker.
  */
-void hive_queen_receive_groom(hive_dynamics_t       *d,
-                              const hive_groom_packet_t *pkt);
+void hive_queen_receive_groom(hive_dynamics_t           *d,
+                              const hive_groom_packet_t *pkt,
+                              hive_logger_t             *log);
 
 /* ----------------------------------------------------------------
  * Demand-driven population regulation

@@ -86,6 +86,10 @@ typedef struct hive_agent_context {
     char               *last_critique;
     hive_score_t        last_score;
     bool                in_use;             /* true while this slot is active     */
+
+    /* Per-iteration score history: ring buffer of the last 4 evaluation scores. */
+    hive_score_t        score_history[4];
+    unsigned            score_history_count; /* total evals stored (wraps at 4)   */
 } hive_agent_context_t;
 
 /* ----------------------------------------------------------------

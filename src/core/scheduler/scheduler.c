@@ -29,11 +29,13 @@
 #include "core/agent/editor.h"
 #include "core/evaluator/evaluator.h"
 #include "core/runtime.h"
+#include "core/trace/trace.h"
 #include "common/logging/logger.h"
 #include "common/strings.h"
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <time.h>
 
 /* ================================================================
@@ -129,6 +131,8 @@ static void context_reset_cycle(hive_agent_context_t *ctx)
     free(ctx->final_output);       ctx->final_output       = NULL;
     free(ctx->last_critique);      ctx->last_critique      = NULL;
     memset(&ctx->last_score, 0, sizeof(ctx->last_score));
+    memset(ctx->score_history, 0, sizeof(ctx->score_history));
+    ctx->score_history_count = 0U;
     ctx->current_stage = HIVE_AGENT_STAGE_ORCHESTRATE;
     ctx->iteration     = 0U;
     ctx->cycle_count++;         /* cycle_count and in_use are preserved */
@@ -475,17 +479,38 @@ static hive_status_t dispatch_evaluate(hive_agent_context_t   *ctx,
                                      ctx->last_score.test_coverage * 15U) / 100U;
     if (ctx->last_score.overall > 100U) ctx->last_score.overall = 100U;
 
-    /* Update last_critique with score summary. */
+    /* Push score into per-iteration ring buffer (last 4 evaluations). */
+    ctx->score_history[ctx->score_history_count % 4U] = ctx->last_score;
+    ctx->score_history_count++;
+
+    /* Build a critique that includes a delta vs the previous iteration. */
     free(ctx->last_critique);
-    ctx->last_critique = hive_string_format(
-        "Iteration %u score: correctness=%u security=%u style=%u "
-        "test_coverage=%u overall=%u",
-        ctx->iteration + 1U,
-        ctx->last_score.correctness,
-        ctx->last_score.security,
-        ctx->last_score.style,
-        ctx->last_score.test_coverage,
-        ctx->last_score.overall);
+    if (ctx->score_history_count >= 2U) {
+        unsigned prev_idx = (ctx->score_history_count - 2U) % 4U;
+        int delta = (int)ctx->last_score.overall
+                    - (int)ctx->score_history[prev_idx].overall;
+        ctx->last_critique = hive_string_format(
+            "Iteration %u score: correctness=%u security=%u style=%u "
+            "test_coverage=%u overall=%u (delta=%+d vs iter %u)",
+            ctx->iteration + 1U,
+            ctx->last_score.correctness,
+            ctx->last_score.security,
+            ctx->last_score.style,
+            ctx->last_score.test_coverage,
+            ctx->last_score.overall,
+            delta,
+            ctx->iteration);
+    } else {
+        ctx->last_critique = hive_string_format(
+            "Iteration %u score: correctness=%u security=%u style=%u "
+            "test_coverage=%u overall=%u",
+            ctx->iteration + 1U,
+            ctx->last_score.correctness,
+            ctx->last_score.security,
+            ctx->last_score.style,
+            ctx->last_score.test_coverage,
+            ctx->last_score.overall);
+    }
     if (ctx->last_critique == NULL) return HIVE_STATUS_OUT_OF_MEMORY;
 
     bool acceptable = hive_evaluator_is_acceptable(&ctx->last_score,
@@ -820,11 +845,29 @@ hive_status_t hive_scheduler_run(hive_scheduler_t *sched,
             clock_gettime(CLOCK_MONOTONIC, &t0);
 
             hive_agent_stage_t stage_before = ctx->current_stage;
+
+            /* Set the dispatch context so hive_agent_generate() can tag
+             * trace entries with the correct cell index and stage. */
+            runtime->trace_agent_index = (int)idx;
+            runtime->trace_stage       = ctx->current_stage;
+
             hive_status_t      stage_status = dispatch_stage(ctx, runtime, sched);
 
             clock_gettime(CLOCK_MONOTONIC, &t1);
             uint64_t elapsed_ns = (uint64_t)(t1.tv_sec  - t0.tv_sec)  * 1000000000ULL
                                 + (uint64_t)(t1.tv_nsec - t0.tv_nsec);
+
+            /* Item #15: treat a stage that ran too long as a failure. */
+            if (stage_status == HIVE_STATUS_OK && elapsed_ns > HIVE_STAGE_TIMEOUT_NS) {
+                stage_status = HIVE_STATUS_IO_ERROR;
+                if (log != NULL) {
+                    hive_logger_logf(log, HIVE_LOG_WARN, "scheduler", "stage_timeout",
+                                     "cell[%zu] stage %s exceeded timeout (%.1fs)",
+                                     idx,
+                                     hive_agent_stage_to_string(stage_before),
+                                     (double)elapsed_ns / 1.0e9);
+                }
+            }
 
             if (log != NULL) {
                 hive_logger_logf(log, HIVE_LOG_DEBUG, "scheduler", "dispatch",
@@ -842,7 +885,8 @@ hive_status_t hive_scheduler_run(hive_scheduler_t *sched,
             build_groom_packet(cell, idx, stage_before, stage_status,
                                ctx, elapsed_ns, &pkt);
             sched_wrlock(sched);
-            hive_queen_receive_groom(sched->dynamics, &pkt);
+            hive_queen_receive_groom(sched->dynamics, &pkt,
+                                     runtime->logger.initialized ? &runtime->logger : NULL);
             sched_unlock(sched);
 
             /* Handle cycle completion. */
@@ -856,6 +900,19 @@ hive_status_t hive_scheduler_run(hive_scheduler_t *sched,
                      * exit.
                      */
                     promote_queen_output(ctx, runtime);
+
+                    /* Trace: record the session-mutation side effect. */
+                    {
+                        char score_buf[32];
+                        snprintf(score_buf, sizeof(score_buf),
+                                 "overall=%u", ctx->last_score.overall);
+                        hive_trace_log_side_effect(
+                            &runtime->tracer, (int)idx, "queen",
+                            HIVE_AGENT_STAGE_DONE,
+                            "queen promoted outputs to session",
+                            score_buf);
+                    }
+
                     if (log != NULL) {
                         hive_logger_logf(log, HIVE_LOG_INFO, "scheduler",
                                          "queen_cycle_done",
@@ -866,6 +923,20 @@ hive_status_t hive_scheduler_run(hive_scheduler_t *sched,
                     }
                     queen_done = true;
                 } else {
+                    /* Trace: record worker cycle completion. */
+                    {
+                        char score_buf[32];
+                        snprintf(score_buf, sizeof(score_buf),
+                                 "overall=%u cycle=%u", ctx->last_score.overall,
+                                 ctx->cycle_count);
+                        hive_trace_log_side_effect(
+                            &runtime->tracer, (int)idx,
+                            hive_role_to_string(cell->role),
+                            HIVE_AGENT_STAGE_DONE,
+                            "worker completed cycle",
+                            score_buf);
+                    }
+
                     if (log != NULL) {
                         hive_logger_logf(log, HIVE_LOG_INFO, "scheduler",
                                          "worker_cycle_done",

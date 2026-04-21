@@ -114,6 +114,7 @@ typedef struct hive_agent_cell {
     hive_agent_traits_t traits;            /* per-agent specialisation flags       */
     uint8_t             vitality_seen;     /* last vitality checksum sniffed       */
     bool                conditioned_ok;    /* allowed to execute this tick?        */
+    uint8_t             consecutive_alarms; /* quarantine counter: reset on success  */
     /* OPTION 3: worker-cell binding fields ------------------------------------ */
     struct hive_agent  *bound_agent;       /* NULL for inactive / Queen (default) /
                                             * drones; allocated by hive_queen_spawn

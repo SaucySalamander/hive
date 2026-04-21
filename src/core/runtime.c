@@ -27,6 +27,17 @@ static const char *default_api_bind_address(void)
     return "127.0.0.1";
 }
 
+static bool parse_env_uint(const char *name, unsigned lo, unsigned hi, unsigned *out)
+{
+    const char *val = getenv(name);
+    if (val == NULL || val[0] == '\0') return false;
+    char *end = NULL;
+    unsigned long n = strtoul(val, &end, 10);
+    if (end == val || *end != '\0' || n < (unsigned long)lo || n > (unsigned long)hi) return false;
+    *out = (unsigned)n;
+    return true;
+}
+
 static const char *selected_inference_backend(const hive_runtime_options_t *options)
 {
     const char *backend = getenv("HIVE_INFERENCE_BACKEND");
@@ -217,6 +228,16 @@ hive_status_t hive_runtime_init(hive_runtime_t *runtime,
         return status;
     }
 
+    /* Apply HIVE_SCORE_THRESHOLD env var to legacy state machine path. */
+    {
+        unsigned thresh = 0U;
+        if (parse_env_uint("HIVE_SCORE_THRESHOLD", 0U, 100U, &thresh)) {
+            runtime->machine.score_threshold = thresh;
+            hive_logger_logf(&runtime->logger, HIVE_LOG_INFO, "runtime", "env_override",
+                             "score_threshold=%u (HIVE_SCORE_THRESHOLD)", thresh);
+        }
+    }
+
 #if !HIVE_LEGACY_SCHEDULER
     /* OPTION 3 — initialise the colony dynamics and worker-cell scheduler. */
     hive_dynamics_init(&runtime->dynamics, 0U);  /* 0 = spawn Queen only */
@@ -224,6 +245,16 @@ hive_status_t hive_runtime_init(hive_runtime_t *runtime,
     hive_scheduler_options_t sched_opts;
     memset(&sched_opts, 0, sizeof(sched_opts));
     sched_opts.iteration_limit = runtime->options.max_iterations;
+
+    /* Apply HIVE_SCORE_THRESHOLD env var to Option-3 scheduler path. */
+    {
+        unsigned thresh = 0U;
+        if (parse_env_uint("HIVE_SCORE_THRESHOLD", 0U, 100U, &thresh)) {
+            sched_opts.score_threshold = thresh;
+            hive_logger_logf(&runtime->logger, HIVE_LOG_INFO, "runtime", "env_override",
+                             "sched.score_threshold=%u (HIVE_SCORE_THRESHOLD)", thresh);
+        }
+    }
 
     status = hive_scheduler_init(&runtime->scheduler,
                                  &runtime->dynamics,
@@ -238,6 +269,8 @@ hive_status_t hive_runtime_init(hive_runtime_t *runtime,
         return status;
     }
 #endif
+
+    hive_trace_init(&runtime->tracer);
 
     hive_logger_logf(&runtime->logger,
                          HIVE_LOG_INFO,
@@ -256,6 +289,7 @@ void hive_runtime_deinit(hive_runtime_t *runtime)
         return;
     }
 
+    hive_trace_deinit(&runtime->tracer);
 #if !HIVE_LEGACY_SCHEDULER
     hive_scheduler_deinit(&runtime->scheduler);
     hive_dynamics_deinit(&runtime->dynamics);
