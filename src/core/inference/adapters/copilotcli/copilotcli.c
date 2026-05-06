@@ -11,6 +11,10 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/* Last error from init (state may be freed by then; keep a static copy) */
+static char g_init_error[512] = {0};
+static pthread_mutex_t g_init_error_lock = PTHREAD_MUTEX_INITIALIZER;
+
 typedef struct copilotcli_stream {
     int cancel_token;
     pid_t child_pid;
@@ -84,8 +88,34 @@ static int copilotcli_init(const char *config_json, void **handle_out)
     }
 
     state->next_cancel_token = 1;
-    state->cmd = hive_string_dup("copilotcli");
+
+    /* Resolve the copilotcli binary path via PATH */
+    char cmd_path[512] = {0};
+    FILE *which = popen("command -v copilotcli 2>/dev/null", "r");
+    if (which != NULL) {
+        if (fgets(cmd_path, sizeof(cmd_path), which) != NULL) {
+            /* Trim trailing newline */
+            size_t len = strlen(cmd_path);
+            while (len > 0 && (cmd_path[len - 1] == '\n' || cmd_path[len - 1] == '\r'))
+                cmd_path[--len] = '\0';
+        }
+        pclose(which);
+    }
+
+    if (cmd_path[0] == '\0') {
+        const char *msg = "copilotcli binary not found in PATH; "
+                          "install the GitHub Copilot CLI and ensure it is on PATH";
+        pthread_mutex_lock(&g_init_error_lock);
+        strncpy(g_init_error, msg, sizeof(g_init_error) - 1);
+        pthread_mutex_unlock(&g_init_error_lock);
+        pthread_mutex_destroy(&state->lock);
+        free(state);
+        return INF_ERR_BACKEND;
+    }
+
+    state->cmd = hive_string_dup(cmd_path);
     if (state->cmd == NULL) {
+        pthread_mutex_destroy(&state->lock);
         free(state);
         return INF_ERR_BACKEND;
     }
@@ -269,7 +299,11 @@ static const char *copilotcli_last_error(void *handle)
 {
     copilotcli_state_t *state = handle;
     if (state == NULL) {
-        return "";
+        /* May have been called after a failed init */
+        pthread_mutex_lock(&g_init_error_lock);
+        const char *err = g_init_error[0] != '\0' ? g_init_error : "";
+        pthread_mutex_unlock(&g_init_error_lock);
+        return err;
     }
 
     pthread_mutex_lock(&state->lock);

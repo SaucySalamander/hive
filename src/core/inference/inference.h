@@ -50,6 +50,7 @@ typedef struct inf_adapter_vtable {
 } inf_adapter_vtable_t;
 
 int inf_register_adapter(const void *adapter_vtable);
+int inf_has_backend(const char *backend_name);
 inf_ctx_t *inf_create(const char *backend_name, const char *config_json);
 void inf_destroy(inf_ctx_t *ctx);
 

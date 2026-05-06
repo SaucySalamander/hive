@@ -4,6 +4,7 @@
 #include "core/agent/orchestrator.h"
 #include "core/model_config.h"
 #include "tools/registry.h"
+#include "core/inference/adapters/copilotcli/copilotcli.h"
 /* OPTION 3 — Worker-Cell Mapping scheduler */
 #include "core/dynamics/dynamics.h"
 #include "core/scheduler/scheduler.h"
@@ -180,11 +181,20 @@ hive_status_t hive_runtime_init(hive_runtime_t *runtime,
         return HIVE_STATUS_UNAVAILABLE;
     }
 
+    /* Register all built-in adapters before init */
+    (void)copilotcli_adapter_register();
+
     status = hive_inference_adapter_init_named(&runtime->adapter,
                                                    backend_name,
                                                    selected_inference_config(),
                                                    &runtime->logger);
     if (status != HIVE_STATUS_OK) {
+        hive_logger_logf(&runtime->logger,
+                         HIVE_LOG_ERROR,
+                         "runtime",
+                         "init",
+                         "inference backend '%s' could not be initialised (status=%d)",
+                         backend_name, (int)status);
         hive_logger_deinit(&runtime->logger);
         return status;
     }

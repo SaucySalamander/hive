@@ -277,8 +277,29 @@ hive_status_t hive_inference_adapter_init_named(hive_inference_adapter_t *adapte
     }
 
     state->logger = logger;
+
+    /* Check registration before attempting to create — gives a clear error */
+    if (!inf_has_backend(backend_name)) {
+        if (logger != NULL) {
+            hive_logger_logf(logger, HIVE_LOG_ERROR,
+                             "inference", "init_named",
+                             "backend '%s' is not registered; "
+                             "available: mock, copilotcli",
+                             backend_name != NULL ? backend_name : "(null)");
+        }
+        free(state);
+        return HIVE_STATUS_UNAVAILABLE;
+    }
+
     state->ctx = inf_create(backend_name, config_json);
     if (state->ctx == NULL) {
+        if (logger != NULL) {
+            hive_logger_logf(logger, HIVE_LOG_ERROR,
+                             "inference", "init_named",
+                             "backend '%s' failed to initialise "
+                             "(check binary in PATH, config JSON, and permissions)",
+                             backend_name != NULL ? backend_name : "(null)");
+        }
         free(state);
         return HIVE_STATUS_UNAVAILABLE;
     }
