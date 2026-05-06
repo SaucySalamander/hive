@@ -84,6 +84,39 @@ void hive_queen_emit_pheromone(hive_dynamics_t *d)
 }
 
 /* ================================================================
+ * hive_queen_emit_waggle
+ * Phase 2.5: Waggle dance signal for task prioritization
+ * ================================================================ */
+
+void hive_queen_emit_waggle(hive_dynamics_t *d)
+{
+    if (d == NULL || !d->queen_alive) return;
+
+    /* Only emit waggle when there's pending work. */
+    if (d->demand_buffer_depth == 0U) {
+        /* Natural decay: waggle strength decays to zero. */
+        if (d->stats.waggle_strength > 0U)
+            d->stats.waggle_strength = (d->stats.waggle_strength > 5U)
+                ? d->stats.waggle_strength - 5U : 0U;
+        if (d->stats.waggle_duration > 0U)
+            d->stats.waggle_duration--;
+        return;
+    }
+
+    /* Waggle strength proportional to demand backlog (capped at 100). */
+    uint32_t backlog = d->demand_buffer_depth;
+    d->stats.waggle_strength = (backlog > 100U) ? 100U : backlog;
+
+    /* Waggle direction encodes task priority (cycle through roles). */
+    d->stats.waggle_direction = (backlog % HIVE_ROLE_COUNT);
+
+    /* Duration: strong signal lasts 8 ticks, decays naturally. */
+    d->stats.waggle_duration = 8U;
+
+    d->stats.active_waggles++;
+}
+
+/* ================================================================
  * hive_queen_spawn
  * ================================================================ */
 

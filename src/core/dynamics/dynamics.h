@@ -145,6 +145,10 @@ typedef struct hive_dynamics_stats {
     unsigned suppressed_workers;          /* cells where conditioned_ok == false   */
     uint64_t average_pheromone_latency_ns; /* stub — 0 until backend exposes this  */
     unsigned requeen_events_this_run;     /* re-queening events since sched init   */
+    /* Phase 2.5: Worker Coordination Signals */
+    uint32_t waggle_strength;             /* [0-100] intensity of task signal      */
+    uint32_t waggle_direction;            /* task type / priority hint             */
+    uint32_t waggle_duration;             /* remaining ticks before decay          */
 } hive_dynamics_stats_t;
 
 /* ----------------------------------------------------------------

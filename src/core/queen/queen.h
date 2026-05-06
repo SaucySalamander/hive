@@ -26,15 +26,25 @@ extern "C" {
  * ---------------------------------------------------------------- */
 
 /**
- * Emit a Queen Substance tick.
+ * Emit a pheromone signal to update colony vitality.
  *
- * Recalculates d->vitality_checksum from the rolling average of worker
- * perf_score values.  Should be called once per simulation tick by the
- * Queen before workers check conditioned_ok.
+ * Called by the Queen during dynamics tick to broadcast vitality and
+ * regulatory signals to workers.
  *
  * @param d  Colony dynamics state.
  */
 void hive_queen_emit_pheromone(hive_dynamics_t *d);
+
+/**
+ * Emit a waggle dance signal when new work arrives.
+ *
+ * Called by the Queen when d->demand_buffer_depth > 0 to broadcast
+ * task priority information to workers.  Workers increase task selection
+ * priority when waggle_strength is high.
+ *
+ * @param d  Colony dynamics state.
+ */
+void hive_queen_emit_waggle(hive_dynamics_t *d);
 
 /* ----------------------------------------------------------------
  * Exclusive spawning factory

@@ -218,7 +218,10 @@ void hive_dynamics_tick(hive_dynamics_t *d)
     /* 1. Queen emits pheromone — must happen before workers check conditioned_ok. */
     hive_queen_emit_pheromone(d);
 
-    /* 2. Re-queening check — promote best worker if Queen is weak. */
+    /* 2. Queen emits waggle dance signal when work arrives. */
+    hive_queen_emit_waggle(d);
+
+    /* 3. Re-queening check — promote best worker if Queen is weak. */
     hive_queen_requeue_if_needed(d);
 
     unsigned seed = (unsigned)time(NULL) ^ (unsigned)d->stats.total_signals;
@@ -305,7 +308,7 @@ void hive_dynamics_tick(hive_dynamics_t *d)
         a->perf_score = (uint32_t)new_score;
     }
 
-    /* 3. Demand-driven spawning — spawn workers if backlog pressure is high. */
+    /* 4. Demand-driven spawning — spawn workers if backlog pressure is high. */
     hive_queen_regulate_population(d);
 
     /* Global signal activity */
@@ -315,11 +318,15 @@ void hive_dynamics_tick(hive_dynamics_t *d)
     if (d->stats.active_pheromones < 5U) {
         d->stats.active_pheromones = 5U + (seed >> 16) % 10U;
     }
+    /* Waggle signals are now emitted by queen; no need for random values here */
     seed = seed * 1103515245U + 12345U;
-    d->stats.active_waggles = (seed >> 16) % 8;
-    seed = seed * 1103515245U + 12345U;
+    /* Natural decay: alarms reduce each tick + waggle duration countdown */
     if (d->stats.active_alarms > 0U)
-        d->stats.active_alarms--;   /* natural decay each tick */
+        d->stats.active_alarms = (d->stats.active_alarms > 1U)
+            ? d->stats.active_alarms - 1U : 0U;
+    /* Waggle duration decays naturally when no new demand */
+    if (d->demand_buffer_depth == 0U && d->stats.waggle_duration > 0U)
+        d->stats.waggle_duration--;
     seed = seed * 1103515245U + 12345U;
     d->stats.pending_proposals = (seed >> 16) % 4;
     seed = seed * 1103515245U + 12345U;
