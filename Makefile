@@ -130,8 +130,8 @@ LDLIBS          += $(GTK_LIBS)
 endif
 
 ifeq ($(HIVE_HAVE_API),1)
-CPPFLAGS += $(UV_CFLAGS) $(CJSON_CFLAGS)
-LDLIBS += $(UV_LIBS) $(CJSON_LIBS)
+CPPFLAGS += $(UV_CFLAGS) -I.
+LDLIBS += $(UV_LIBS) -L. -lcjson
 endif
 
 .PHONY: all build run clean rebuild

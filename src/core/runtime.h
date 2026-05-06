@@ -5,6 +5,7 @@
 #include "core/state_machine.h"
 #include "core/types.h"
 #include "core/inference/adapter.h"
+#include "core/model_config.h"
 #include "common/logging/logger.h"
 #include "tools/registry.h"
 
@@ -45,6 +46,7 @@ typedef struct hive_runtime {
     hive_runtime_options_t options;
     hive_logger_t logger;
     hive_inference_adapter_t adapter;
+    hive_model_config_t model_config;  /**< Per-role model selection and defaults. */
     hive_tool_registry_t tools;
     hive_session_t session;
     hive_state_machine_t machine;   /* used when HIVE_LEGACY_SCHEDULER=1 */

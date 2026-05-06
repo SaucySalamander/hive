@@ -1,4 +1,8 @@
 #include "tui/tui.h"
+#include "tui/pages/queen.h"
+#include "tui/pages/dashboard.h"
+#include "tui/pages/backlog.h"
+#include "tui/pages/status.h"
 
 #include "core/runtime.h"
 #include "common/logging/logger.h"
@@ -86,19 +90,54 @@ hive_status_t hive_tui_run(hive_runtime_t *runtime)
     keypad(stdscr, TRUE);
     (void)curs_set(0);
 
-    erase();
-    mvprintw(0, 0, "hive TUI");
-    mvprintw(2, 0, "Workspace: %s", safe_text(runtime->session.workspace_root));
-    mvprintw(3, 0, "Prompt: %s", safe_text(runtime->session.user_prompt));
-    mvprintw(5, 0, "Tool execution is gated interactively.");
-    mvprintw(6, 0, "The runtime will now execute the hierarchical agent loop.");
-    refresh();
+    /* Show main menu */
+    while (true) {
+        erase();
+        mvprintw(2, (COLS - 20) / 2, "HIVE RUNTIME MENU");
+        mvprintw(4, 2, "1) Run regular execution");
+        mvprintw(5, 2, "2) Dashboard (view workers and demand)");
+        mvprintw(6, 2, "3) Backlog (view queue and models)");
+        mvprintw(7, 2, "4) Status (view colony health)");
+        mvprintw(8, 2, "5) Plan Mode (create and approve plans)");
+        mvprintw(9, 2, "6) Quit");
+        mvprintw(11, 2, "Select an option: ");
+        refresh();
 
-    const hive_status_t status = hive_runtime_run(runtime);
-    show_final_summary(runtime);
+        int key = getch();
+        
+        if (key == '1') {
+            /* Regular execution */
+            erase();
+            mvprintw(0, 0, "hive TUI");
+            mvprintw(2, 0, "Workspace: %s", safe_text(runtime->session.workspace_root));
+            mvprintw(3, 0, "Prompt: %s", safe_text(runtime->session.user_prompt));
+            mvprintw(5, 0, "Tool execution is gated interactively.");
+            mvprintw(6, 0, "The runtime will now execute the hierarchical agent loop.");
+            refresh();
+
+            (void)hive_runtime_run(runtime);
+            show_final_summary(runtime);
+            break;
+        } else if (key == '2') {
+            /* Dashboard */
+            hive_tui_page_dashboard(runtime);
+        } else if (key == '3') {
+            /* Backlog */
+            hive_tui_page_backlog(runtime);
+        } else if (key == '4') {
+            /* Status */
+            hive_tui_page_status(runtime);
+        } else if (key == '5') {
+            /* Plan mode */
+            hive_tui_page_queen(runtime);
+        } else if (key == '6' || key == 27) {
+            /* Quit */
+            break;
+        }
+    }
 
     endwin();
-    return status;
+    return HIVE_STATUS_OK;
 }
 
 #else

@@ -2,6 +2,7 @@
 
 #include "common/strings.h"
 #include "core/agent/orchestrator.h"
+#include "core/model_config.h"
 #include "tools/registry.h"
 /* OPTION 3 — Worker-Cell Mapping scheduler */
 #include "core/dynamics/dynamics.h"
@@ -294,6 +295,7 @@ void hive_runtime_deinit(hive_runtime_t *runtime)
     hive_scheduler_deinit(&runtime->scheduler);
     hive_dynamics_deinit(&runtime->dynamics);
 #endif
+    hive_model_config_free(&runtime->model_config);
     hive_tool_registry_deinit(&runtime->tools);
     hive_session_deinit(&runtime->session);
     hive_inference_adapter_deinit(&runtime->adapter);

@@ -222,7 +222,12 @@ static hive_status_t run_application(const char *program_name, hive_cli_state_t 
     } else if (state->runtime_options.enable_tui) {
         status = hive_tui_run(&runtime);
     } else if (state->runtime_options.enable_gtk4) {
+#if HIVE_HAVE_GTK4
         status = hive_gtk_run(&runtime);
+#else
+        fprintf(stderr, "hive: GTK4 support not compiled in\n");
+        status = HIVE_STATUS_UNAVAILABLE;
+#endif
 #if HIVE_HAVE_RAYGUI
     } else if (state->runtime_options.enable_raygui) {
         status = hive_raygui_run(&runtime);

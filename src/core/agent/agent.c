@@ -182,6 +182,7 @@ hive_agent_t *hive_agent_clone_descriptor(const hive_agent_t *src)
 
     clone->kind   = src->kind;
     clone->vtable = src->vtable;   /* shared; vtables are static, never freed */
+    clone->model_override = src->model_override;  /* shared; model strings are static */
 
     clone->name = hive_string_dup(src->name);
     if (src->name != NULL && clone->name == NULL) {
