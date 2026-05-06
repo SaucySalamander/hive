@@ -36,6 +36,8 @@ struct hive_agent {
     const char *name;
     const char *instructions;
     const hive_agent_vtable_t *vtable;
+    /* Optional task-level model override (for per-task model selection) */
+    const char *model_override;
 };
 
 /**

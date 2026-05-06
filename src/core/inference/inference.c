@@ -460,6 +460,15 @@ int inf_register_adapter(const void *adapter_vtable)
     return status;
 }
 
+int inf_has_backend(const char *backend_name)
+{
+    registry_ensure_ready();
+    pthread_mutex_lock(&g_registry_lock);
+    const int found = (registry_find_locked(backend_name) != NULL) ? 1 : 0;
+    pthread_mutex_unlock(&g_registry_lock);
+    return found;
+}
+
 inf_ctx_t *inf_create(const char *backend_name, const char *config_json)
 {
     registry_ensure_ready();

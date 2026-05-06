@@ -16,6 +16,7 @@ DEPFILES := $(OBJECTS:.o=.d)
 
 COMMON_CPPFLAGS := -D_POSIX_C_SOURCE=200809L -I$(SRC_DIR)
 COMMON_CFLAGS := -std=c23 -Wall -Wextra -Werror -pedantic -pthread
+COMMON_CFLAGS_NO_PEDANTIC := -std=c23 -Wall -Wextra -Werror -pthread
 COMMON_LDLIBS := -pthread -lm
 
 ARGP_AVAILABLE := $(shell printf '%s\n' '#define _GNU_SOURCE' '#include <argp.h>' 'int main(void) { return 0; }' | $(CC) $(COMMON_CPPFLAGS) -x c - -c -o /dev/null >/dev/null 2>&1 && echo 1 || echo 0)
@@ -130,8 +131,8 @@ LDLIBS          += $(GTK_LIBS)
 endif
 
 ifeq ($(HIVE_HAVE_API),1)
-CPPFLAGS += $(UV_CFLAGS) $(CJSON_CFLAGS)
-LDLIBS += $(UV_LIBS) $(CJSON_LIBS)
+CPPFLAGS += $(UV_CFLAGS) -I.
+LDLIBS += $(UV_LIBS) -L. -lcjson
 endif
 
 .PHONY: all build run clean rebuild
@@ -147,6 +148,12 @@ $(BUILD_SENTINEL):
 	mkdir -p $(BUILD_DIR)
 	touch $@
 
+# GTK files: exclude -pedantic flag to avoid false warnings in system headers
+$(BUILD_DIR)/gtk/%.o: $(SRC_DIR)/gtk/%.c | $(BUILD_SENTINEL)
+	mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(COMMON_CFLAGS_NO_PEDANTIC) -MMD -MP -c $< -o $@
+
+# Generic build rule for all other files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_SENTINEL)
 	mkdir -p $(@D)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@

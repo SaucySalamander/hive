@@ -71,7 +71,7 @@ static void send_http_response(hive_api_client_context_t *client, const char *bo
     (void)uv_write(&client->write_request, (uv_stream_t *)&client->handle, &buffer, 1, on_write_complete);
 }
 
-static char *build_body(hive_runtime_t *runtime, const char *path)
+static char *build_body(hive_runtime_t *runtime, const char *path, const char *method)
 {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
@@ -83,6 +83,45 @@ static char *build_body(hive_runtime_t *runtime, const char *path)
         cJSON_AddStringToObject(root, "service", "hive");
         cJSON_AddStringToObject(root, "workspace", safe_text(runtime->session.workspace_root));
         cJSON_AddNumberToObject(root, "iterations", (double)runtime->session.iteration);
+    } else if (path != NULL && strcmp(path, "/models") == 0) {
+        /* GET /models - return available models and current role defaults */
+        cJSON *models_array = cJSON_CreateArray();
+        for (size_t i = 0; i < runtime->model_config.model_count; i++) {
+            cJSON_AddItemToArray(models_array, cJSON_CreateString(runtime->model_config.models[i]));
+        }
+        cJSON_AddItemToObject(root, "models", models_array);
+
+        cJSON *role_defaults = cJSON_CreateObject();
+        for (size_t i = 0; i < runtime->model_config.role_model_count; i++) {
+            cJSON_AddStringToObject(role_defaults,
+                                   runtime->model_config.role_models[i].role_name,
+                                   runtime->model_config.role_models[i].model_name);
+        }
+        cJSON_AddItemToObject(root, "role_defaults", role_defaults);
+
+        cJSON *worker_models = cJSON_CreateObject();
+        cJSON_AddStringToObject(worker_models, "default_model", runtime->model_config.default_model);
+        cJSON_AddItemToObject(root, "worker_models", worker_models);
+    } else if (path != NULL && strcmp(path, "/model-config") == 0 && strcmp(method, "GET") == 0) {
+        /* GET /model-config - return current model configuration */
+        cJSON_AddStringToObject(root, "default_model", runtime->model_config.default_model);
+
+        cJSON *models_array = cJSON_CreateArray();
+        for (size_t i = 0; i < runtime->model_config.model_count; i++) {
+            cJSON_AddItemToArray(models_array, cJSON_CreateString(runtime->model_config.models[i]));
+        }
+        cJSON_AddItemToObject(root, "available_models", models_array);
+
+        cJSON *role_defaults = cJSON_CreateObject();
+        for (size_t i = 0; i < runtime->model_config.role_model_count; i++) {
+            cJSON_AddStringToObject(role_defaults,
+                                   runtime->model_config.role_models[i].role_name,
+                                   runtime->model_config.role_models[i].model_name);
+        }
+        cJSON_AddItemToObject(root, "role_defaults", role_defaults);
+
+        cJSON_AddNumberToObject(root, "model_count", (double)runtime->model_config.model_count);
+        cJSON_AddNumberToObject(root, "role_mapping_count", (double)runtime->model_config.role_model_count);
     } else {
         cJSON_AddStringToObject(root, "status", "error");
         cJSON_AddStringToObject(root, "message", "unsupported endpoint");
@@ -110,11 +149,23 @@ static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
     const char *request = buf->base;
     const char *path = "/unknown";
+    const char *method = "GET";
+
     if (strncmp(request, "GET /health", 11U) == 0) {
         path = "/health";
+        method = "GET";
+    } else if (strncmp(request, "GET /models", 11U) == 0) {
+        path = "/models";
+        method = "GET";
+    } else if (strncmp(request, "GET /model-config", 16U) == 0) {
+        path = "/model-config";
+        method = "GET";
+    } else if (strncmp(request, "POST /model-config", 17U) == 0) {
+        path = "/model-config";
+        method = "POST";
     }
 
-    char *body = build_body(server->runtime, path);
+    char *body = build_body(server->runtime, path, method);
     if (body == NULL) {
         body = cJSON_PrintUnformatted(cJSON_CreateObject());
     }
@@ -125,7 +176,14 @@ static void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
         return;
     }
 
-    send_http_response(client, body, strcmp(path, "/health") == 0 ? 200 : 404);
+    int status_code = 200;
+    if (strcmp(path, "/health") == 0 || strcmp(path, "/models") == 0 || strcmp(path, "/model-config") == 0) {
+        status_code = 200;
+    } else {
+        status_code = 404;
+    }
+
+    send_http_response(client, body, status_code);
     free(body);
     free(buf->base);
 }
