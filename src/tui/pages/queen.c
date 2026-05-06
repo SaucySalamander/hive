@@ -224,7 +224,7 @@ static void edit_task_inline(hive_tui_plan_context_t *ctx, const plan_layout_t *
                         buf + ctx->task_cursor + 1,
                         (size_t)(len - ctx->task_cursor));
             }
-        } else if (isprint(key) && len + 1 < (int)buf_cap - 1) {
+        } else if (key > 0 && isprint(key) && len + 1 < (int)buf_cap - 1) {
             memmove(buf + ctx->task_cursor + 1,
                     buf + ctx->task_cursor,
                     (size_t)(len - ctx->task_cursor + 1));
@@ -280,7 +280,7 @@ static void edit_single_line_at(char *buffer, size_t max_len,
                 len--;
                 buffer[len] = '\0';
             }
-        } else if (isprint(key) && len + 1 < (int)max_len - 1) {
+        } else if (key > 0 && isprint(key) && len + 1 < (int)max_len - 1) {
             memmove(buffer + pos + 1, buffer + pos, (size_t)(len - pos + 1));
             buffer[pos++] = (char)key;
             len++;
