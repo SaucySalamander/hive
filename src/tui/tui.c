@@ -106,16 +106,15 @@ hive_status_t hive_tui_run(hive_runtime_t *runtime)
         int key = getch();
         
         if (key == '1') {
-            /* Regular execution */
-            erase();
-            mvprintw(0, 0, "hive TUI");
-            mvprintw(2, 0, "Workspace: %s", safe_text(runtime->session.workspace_root));
-            mvprintw(3, 0, "Prompt: %s", safe_text(runtime->session.user_prompt));
-            mvprintw(5, 0, "Tool execution is gated interactively.");
-            mvprintw(6, 0, "The runtime will now execute the hierarchical agent loop.");
-            refresh();
-
+            /* Restore terminal before running — prevents stdout/stderr fighting ncurses */
+            endwin();
             (void)hive_runtime_run(runtime);
+            /* Re-init ncurses for the summary screen */
+            initscr();
+            cbreak();
+            noecho();
+            keypad(stdscr, TRUE);
+            (void)curs_set(0);
             show_final_summary(runtime);
             break;
         } else if (key == '2') {

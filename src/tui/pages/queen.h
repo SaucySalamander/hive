@@ -14,11 +14,13 @@ extern "C" {
  * description, model override, and role hints.
  */
 typedef struct hive_tui_plan_context {
-    char task_description[512];
+    char task_description[4096]; /* Large enough for spec-driven prompts */
     char model_override[128];
     char role_hints[256];
     uint32_t pending_demand;
-    int edit_field;  /* 0=description, 1=model, 2=hints, 3=review */
+    int edit_field;   /* 0=task spec, 1=model, 2=role hints */
+    int task_cursor;  /* byte offset of editing cursor in task_description */
+    int task_scroll;  /* first visible visual line in task area */
 } hive_tui_plan_context_t;
 
 /**
