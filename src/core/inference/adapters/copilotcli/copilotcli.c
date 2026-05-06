@@ -91,7 +91,7 @@ static int copilotcli_init(const char *config_json, void **handle_out)
 
     /* Resolve the copilotcli binary path via PATH */
     char cmd_path[512] = {0};
-    FILE *which = popen("command -v copilotcli 2>/dev/null", "r");
+    FILE *which = popen("command -v copilot 2>/dev/null", "r");
     if (which != NULL) {
         if (fgets(cmd_path, sizeof(cmd_path), which) != NULL) {
             /* Trim trailing newline */
@@ -103,8 +103,8 @@ static int copilotcli_init(const char *config_json, void **handle_out)
     }
 
     if (cmd_path[0] == '\0') {
-        const char *msg = "copilotcli binary not found in PATH; "
-                          "install the GitHub Copilot CLI and ensure it is on PATH";
+        const char *msg = "copilot binary not found in PATH; "
+                          "install the GitHub Copilot CLI and ensure 'copilot' is on PATH";
         pthread_mutex_lock(&g_init_error_lock);
         strncpy(g_init_error, msg, sizeof(g_init_error) - 1);
         pthread_mutex_unlock(&g_init_error_lock);
